@@ -1,8 +1,8 @@
-# Due Diligence GPT (DDGPT) — V2 Repo (Cohere)
+# Due Diligence GPT
 
-This repo is a **robust, GitHub-demoable** proof-of-concept for AI-enabled investment due diligence workflows.
+This repo is a proof-of-concept for AI-enabled investment due diligence workflows.
 
-It emphasizes *software quality* and *diligence-grade trust controls*:
+It emphasizes:
 - Strict schemas (Pydantic)
 - Evidence-first extraction (page + snippet)
 - Deterministic confidence scoring + document authority weighting
@@ -11,6 +11,8 @@ It emphasizes *software quality* and *diligence-grade trust controls*:
 - Caching (doc-hash keyed) to avoid repeated model calls
 - CLI with reproducible runs
 - Tests + a small evaluation harness
+
+For a more comprehensive overview and motivation, check out the design doc [here](https://docs.google.com/document/d/1SKHU_lYtQejw2OVNPCbj42KtVMGRmEKW9S3xc7w0iU4/edit?tab=t.0#heading=h.lb5ydoxel954). 
 
 ## Quickstart
 
@@ -36,6 +38,7 @@ Artifacts are written to `--out`:
 - `run.log` (audit trail)
 
 ## CLI commands
+
 - `run` : end-to-end pipeline
 - `extract` : extraction only
 - `flag` : rules only
@@ -49,7 +52,8 @@ python -m ddgpt.cli flag --out outputs/extract_only
 python -m ddgpt.cli report --out outputs/extract_only
 ```
 
-## Trust & guardrails (POC level)
+## Trust & Guardrails
+
 - **No hallucinations policy**: missing fields are null + listed in `missing_fields`.
 - **Evidence required**: every field includes `{doc_name, page, snippet}`.
 - **Evidence verification**: if snippet is not found verbatim on the cited page, confidence is reduced and a note is added.
@@ -59,6 +63,3 @@ python -m ddgpt.cli report --out outputs/extract_only
 ```bash
 pytest -q
 ```
-
-## Notes
-This is a POC repo designed for fast iteration and diligence-grade reliability patterns (auditability, reproducibility, evidence-first).
