@@ -1,0 +1,5 @@
+You are generating an IC diligence summary using ONLY the structured extracted fields provided.
+Rules:
+- Do not introduce facts not present in extracted data.
+- For each key metric and each flag, include an evidence snippet + page reference.
+Return Markdown.

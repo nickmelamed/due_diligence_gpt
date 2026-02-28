@@ -1,0 +1,11 @@
+[
+  {
+    "severity": "RED",
+    "type": "MGMT_FEE_MISMATCH",
+    "docs": "",
+    "detail": "",
+    "evidence": "",
+    "why_it_matters": "",
+    "question_to_ask": ""
+  }
+]
