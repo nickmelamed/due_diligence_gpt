@@ -32,7 +32,7 @@ class NumericMismatchRule(Rule):
                             detail=f"AUM differs by {d*100:.1f}%",
                             evidence=f'{docA} (p.{A["aum"]["evidence"]["page"]}): {A["aum"]["evidence"]["snippet"]} | {docB} (p.{B["aum"]["evidence"]["page"]}): {B["aum"]["evidence"]["snippet"]}',
                             why_it_matters="AUM impacts scale, fees, and benchmarking; mismatches require reconciliation.",
-                            question_to_ask="Which document is authoritative for AUM as-of date? Provide supporting statement/capital account detail."
+                            question_to_ask="Which document is authoritative for AUM as-of date? Provide supporting statement/capital account details."
                         ))
 
                 feeA = A["mgmt_fee"]["value"]; feeB = B["mgmt_fee"]["value"]

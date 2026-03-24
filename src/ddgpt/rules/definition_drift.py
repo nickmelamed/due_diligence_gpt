@@ -25,6 +25,6 @@ class DefinitionDriftRule(Rule):
                         detail="IRR definition language differs (gross vs net).",
                         evidence=f'{docA} (p.{A["net_irr"]["evidence"]["page"]}): {A["net_irr"]["evidence"]["snippet"]} | {docB} (p.{B["net_irr"]["evidence"]["page"]}): {B["net_irr"]["evidence"]["snippet"]}',
                         why_it_matters="Definition drift can mislead IC comparisons and skew underwriting decisions.",
-                        question_to_ask="Confirm whether IRR reported is net or gross and reconcile to a consistent definition."
+                        question_to_ask="Confirm whether IRR reported is net or gross and reconcile to consistent definition."
                     ))
         return flags
