@@ -91,9 +91,9 @@ def eval(
         exp_types = sorted([f["type"] for f in expected])
         act_types = sorted([f["type"] for f in actual])
         if exp_types == act_types:
-            logger.info("✅ eval PASS: flag types match expected")
+            logger.info("eval PASS: flag types match expected")
         else:
-            logger.info(f"❌ eval FAIL\nexpected={exp_types}\nactual={act_types}")
+            logger.info(f"eval FAIL\nexpected={exp_types}\nactual={act_types}")
     else:
         logger.info("No expected_flags.json found; ran scenario only.")
 
