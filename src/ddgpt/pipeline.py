@@ -65,7 +65,7 @@ def extract_all(paths: List[str], cfg: Config, out_dir: str, logger) -> List[Dic
         except Exception as e:
             logger.info(f"cohere extraction failed for {doc_name}; fallback to regex. Error={type(e).__name__}: {e}")
             doc = fallback.extract(doc_name, pages)
-            doc.notes.append(f"NOTE: Cohere extraction failed; used regex fallback. Error: {type(e).__name__}: {e}")
+            doc.notes.append(f"cohere extraction failed; used regex fallback. Error: {type(e).__name__}: {e}")
 
         doc = verify_and_score(doc, pages)
         data = doc.model_dump()
