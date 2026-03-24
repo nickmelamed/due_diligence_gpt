@@ -21,7 +21,7 @@ def authority_weight(doc_name: str) -> float:
     for key, w in AUTHORITY_WEIGHTS:
         if key in name:
             return w
-    return 0.65
+    return 0.5
 
 def _page_text(pages: List[Page], page_num: int | None) -> str:
     if page_num is None:
