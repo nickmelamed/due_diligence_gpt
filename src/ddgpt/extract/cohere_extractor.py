@@ -49,12 +49,24 @@ SCHEMA EXAMPLE (shape only):
 DOCUMENT:
 {pages_block}
 """.strip()
+        
+        for attempt in range(3):
+            try:
+                resp = self.client.chat(model=self.model, 
+                                        message=msg, 
+                                        temperature=self.temperature)
+                text = resp.text.strip()
 
-        resp = self.client.chat(model=self.model, message=msg, temperature=self.temperature)
-        text = resp.text.strip()
+                m = re.search(r"\{.*\}", text, flags=re.DOTALL)
+                if not m:
+                    raise ValueError("Could not parse JSON from Cohere response.")
+                data = json.loads(m.group(0))
+                return ExtractedDoc.model_validate(data)
+            
+            except Exception as e:
+                if attempt == 2:
+                    raise e
 
-        m = re.search(r"\{.*\}", text, flags=re.DOTALL)
-        if not m:
-            raise ValueError("Could not parse JSON from Cohere response.")
-        data = json.loads(m.group(0))
-        return ExtractedDoc.model_validate(data)
+
+
+        
