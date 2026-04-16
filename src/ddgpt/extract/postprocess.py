@@ -4,6 +4,7 @@ import re
 
 from ddgpt.io.loaders import Page
 from ddgpt.extract.schemas import ExtractedDoc
+from ddgpt.pipeline.scoring import temporal_weight, final_confidence
 
 AUTHORITY_WEIGHTS = [
     ("lpa", 0.95),
@@ -31,8 +32,34 @@ def _page_text(pages: List[Page], page_num: int | None) -> str:
             return p.text or ""
     return ""
 
-def verify_and_score(doc: ExtractedDoc, pages: List[Page]) -> ExtractedDoc:
+
+def verify_and_score(doc, pages):
     base_conf = authority_weight(doc.doc_name)
+    recency = temporal_weight(doc.doc_date)
+
+    def process(metric, key):
+        if metric.value is None:
+            doc.missing_fields.append(f"{key}.value")
+            metric.confidence = 0.0
+            return
+
+        extraction_conf = metric.confidence
+        agreement = 0.8  # placeholder (can upgrade later)
+
+        metric.confidence = final_confidence(
+            extraction_conf,
+            base_conf,
+            agreement,
+            recency
+        )
+
+    process(doc.aum, "aum")
+    process(doc.net_irr, "net_irr")
+    process(doc.tvpi, "tvpi")
+    process(doc.target_irr, "target_irr")
+    process(doc.mgmt_fee, "mgmt_fee")
+
+    return doc
 
     def process_metric(metric, key: str):
         if metric.value is None:
