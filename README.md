@@ -2,16 +2,6 @@
 
 This repo is a proof-of-concept for AI-enabled investment due diligence workflows.
 
-It emphasizes:
-- Strict schemas (Pydantic)
-- Evidence-first extraction (page + snippet)
-- Deterministic confidence scoring + document authority weighting
-- Contradiction rules (RED/YELLOW)
-- Run artifacts + audit logs
-- Caching (doc-hash keyed) to avoid repeated model calls
-- CLI with reproducible runs
-- Tests + a small evaluation harness
-
 For a more comprehensive overview and motivation, check out the design doc [here](https://docs.google.com/document/d/1SKHU_lYtQejw2OVNPCbj42KtVMGRmEKW9S3xc7w0iU4/edit?tab=t.0#heading=h.lb5ydoxel954). 
 
 ## Quickstart

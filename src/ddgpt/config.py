@@ -4,7 +4,7 @@ from typing import List, Optional
 
 class ModelConfig(BaseModel):
     provider: str = Field(default="cohere")
-    model: str = Field(default="command-r-plus")
+    model: str = Field(default="command-a-03-2025")
     temperature: float = Field(default=0.0)
 
 class RuleConfig(BaseModel):
