@@ -6,3 +6,4 @@ __pycache__/
 .cache/
 outputs/
 due_gpt/
+*egg-info/

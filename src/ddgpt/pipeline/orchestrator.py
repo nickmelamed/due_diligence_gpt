@@ -1,5 +1,3 @@
-# ddgpt/pipeline/orchestrator.py
-
 from ddgpt.pipeline.fusion_extractor import FusionExtractor
 from ddgpt.extract.postprocess import verify_and_score
 from ddgpt.risk.engine import RiskEngine
