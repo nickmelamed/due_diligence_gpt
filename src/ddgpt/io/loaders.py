@@ -1,32 +1,49 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import List, Tuple
-import os
 
-try:
-    from pypdf import PdfReader
-except Exception:
-    PdfReader = None
+from pathlib import Path
+from pydantic import BaseModel
+import fitz
 
-@dataclass
-class Page:
-    page_num: int  # 1-indexed
+from ddgpt.extract.tables.ensemble_tables import EnsembleTableExtractor
+
+class Page(BaseModel):
+    page_num: int
     text: str
 
-def load_document(path: str) -> Tuple[str, List[Page]]:
-    doc_name = os.path.basename(path)
-    if path.lower().endswith(".pdf"):
-        if PdfReader is None:
-            raise RuntimeError("pypdf not installed. pip install -r requirements.txt")
-        reader = PdfReader(path)
-        pages: List[Page] = []
-        for i, p in enumerate(reader.pages):
-            pages.append(Page(page_num=i+1, text=(p.extract_text() or "").strip()))
-        return doc_name, pages
+class LoadedDocument(BaseModel):
+    doc_name: str
 
-    if path.lower().endswith(".txt"):
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
-        return doc_name, [Page(page_num=1, text=text)]
+    path: str
 
-    raise ValueError(f"Unsupported file type: {path}")
+    pages: list[Page]
+
+    tables: list = []
+
+def load_document(path: str):
+    ext = Path(path).suffix.lower()
+
+    if ext != ".pdf":
+        raise ValueError("Only PDFs supported")
+
+    doc = fitz.open(path)
+
+    pages = []
+
+    for i, page in enumerate(doc):
+        pages.append(
+            Page(
+                page_num=i + 1,
+                text=page.get_text("text")
+            )
+        )
+
+    table_extractor = EnsembleTableExtractor()
+
+    tables = table_extractor.extract(path)
+
+    return LoadedDocument(
+        doc_name=Path(path).name,
+        path=path,
+        pages=pages,
+        tables=tables
+    )
