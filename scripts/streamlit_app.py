@@ -1,20 +1,28 @@
 import streamlit as st
 import tempfile
-import json
-
-from ddgpt.pipeline.builders import build_extractors, build_rules
-from ddgpt.pipeline.orchestrator import DiligencePipeline
-from ddgpt.config import Config
-from ddgpt.io.loaders import load_document
-from ddgpt.render.pdf_report import render_ic_pdf
-
+import warnings
 from dotenv import load_dotenv
+
+from ddgpt.pipeline.builders import (
+    build_extractors,
+    build_rules
+)
+
+from ddgpt.pipeline.orchestrator import (
+    DiligencePipeline
+)
+
+from ddgpt.config import Config
+
+from ddgpt.io.loaders import load_document
+
+from ddgpt.render.pdf_report import (
+    render_ic_pdf
+)
 
 load_dotenv()
 
-import warnings
-
-warnings.filterwarnings( # get rid of warning spam in terminal 
+warnings.filterwarnings(
     "ignore",
     message="CropBox missing from /Page"
 )
@@ -32,32 +40,105 @@ uploaded = st.file_uploader(
     accept_multiple_files=True
 )
 
+# SESSION STATE INIT
+
+if "result" not in st.session_state:
+    st.session_state.result = None
+
+if "pdf_bytes" not in st.session_state:
+    st.session_state.pdf_bytes = None
+
+if "last_upload_hash" not in st.session_state:
+    st.session_state.last_upload_hash = None
+
+# HELPER
+
+def files_hash(files):
+    return tuple(
+        (f.name, f.size)
+        for f in files
+    )
+
+# PIPELINE EXECUTION
+
 if uploaded:
-    docs = []
 
-    for f in uploaded:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(f.read())
-            tmp.flush()
+    current_hash = files_hash(uploaded)
 
-            docs.append(
-                load_document(tmp.name)
+    should_rerun = (
+        st.session_state.result is None
+        or current_hash != st.session_state.last_upload_hash
+    )
+
+    if should_rerun:
+
+        docs = []
+
+        with st.spinner(
+            "Running diligence pipeline..."
+        ):
+
+            for f in uploaded:
+
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=".pdf"
+                ) as tmp:
+
+                    tmp.write(f.read())
+
+                    tmp.flush()
+
+                    docs.append(
+                        load_document(tmp.name)
+                    )
+
+            cfg = Config()
+
+            extractors = build_extractors(cfg)
+
+            rules = build_rules(cfg)
+
+            pipeline = DiligencePipeline(
+                extractors,
+                rules
             )
 
-    cfg = Config()
+            result = pipeline.run(docs)
 
-    extractors = build_extractors(cfg)
-    rules = build_rules(cfg)
+            render_ic_pdf(
+                "ic_memo.pdf",
+                result["ic_memo"]
+            )
 
-    pipeline = DiligencePipeline(extractors, rules)
+            with open(
+                "ic_memo.pdf",
+                "rb"
+            ) as f:
+                pdf_bytes = f.read()
 
-    with st.spinner("Running diligence pipeline..."):
-        result = pipeline.run(docs)
+            st.session_state.result = result
+
+            st.session_state.pdf_bytes = pdf_bytes
+
+            st.session_state.last_upload_hash = (
+                current_hash
+            )
+
+# DISPLAY RESULTS
+
+if st.session_state.result:
+
+    result = st.session_state.result
 
     st.success("Pipeline complete")
 
     st.subheader("Risk Score")
-    st.metric("Risk Score", f"{result['risk_score']:.2f}")
+
+    st.metric(
+        "Risk Score",
+        f"{result['risk_score']:.2f}"
+    )
 
     st.subheader("Flags")
 
@@ -67,14 +148,9 @@ if uploaded:
 
     st.markdown(result["ic_memo"])
 
-    render_ic_pdf(
-        "ic_memo.pdf",
-        result["ic_memo"]
+    st.download_button(
+        "Download IC Memo PDF",
+        data=st.session_state.pdf_bytes,
+        file_name="ic_memo.pdf",
+        mime="application/pdf"
     )
-
-    with open("ic_memo.pdf", "rb") as f:
-        st.download_button(
-            "Download IC Memo PDF",
-            f,
-            file_name="ic_memo.pdf"
-        )
