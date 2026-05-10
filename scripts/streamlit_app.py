@@ -8,6 +8,17 @@ from ddgpt.config import Config
 from ddgpt.io.loaders import load_document
 from ddgpt.render.pdf_report import render_ic_pdf
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+import warnings
+
+warnings.filterwarnings( # get rid of warning spam in terminal 
+    "ignore",
+    message="CropBox missing from /Page"
+)
+
 st.set_page_config(
     page_title="DDGPT",
     layout="wide"

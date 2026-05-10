@@ -9,8 +9,12 @@ class EnsembleTableExtractor:
             CamelotTableExtractor(),
             PDFPlumberTableExtractor()
         ]
+        self.cache = {}
 
     def extract(self, pdf_path: str):
+        if pdf_path in self.cache:
+            return self.cache[pdf_path]
+        
         all_tables = []
 
         for extractor in self.extractors:
@@ -21,5 +25,7 @@ class EnsembleTableExtractor:
 
             except Exception as e:
                 print(f"table extractor failed: {e}")
+        
+        self.cache[pdf_path] = all_tables
 
         return all_tables

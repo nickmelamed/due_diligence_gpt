@@ -3,6 +3,7 @@ from ddgpt.extract.regex_extractor import RegexExtractor
 from ddgpt.extract.cohere_extractor import CohereExtractor
 from ddgpt.rules.numeric_mismatch import NumericMismatchRule
 from ddgpt.rules.definition_drift import DefinitionDriftRule
+from ddgpt.rules.internal_inconsistency import InternalInconsistencyRule
 
 def build_extractors(cfg):
     prompt_text = (Path(cfg.run.prompts_dir) / cfg.run.extract_prompt).read_text()
@@ -24,5 +25,6 @@ def build_rules(cfg):
             cfg.rules.mgmt_fee_abs_pct,
             cfg.rules.target_irr_abs_pct
         ),
-        DefinitionDriftRule()
+        DefinitionDriftRule(),
+        InternalInconsistencyRule(),
     ]

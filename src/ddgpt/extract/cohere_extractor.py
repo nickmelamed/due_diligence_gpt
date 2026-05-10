@@ -38,6 +38,10 @@ class CohereExtractor(Extractor):
             if k not in data or data[k] is None:
                 data[k] = v
 
+        # normalize doc_date
+        if isinstance(data.get("doc_date"), dict):
+            data["doc_date"] = data["doc_date"].get("value")
+
         # normalize notes
         cleaned_notes = []
         for n in data.get("notes", []):
