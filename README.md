@@ -83,6 +83,8 @@ The dashboard supports:
 - IC memo rendering
 - downloadable PDF reports
 
+I've included a `test_packet.pdf` for you to use for trying out the interface. 
+
 ---
 
 # Pipeline Architecture
