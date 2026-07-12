@@ -2,10 +2,10 @@
   {
     "severity": "RED",
     "type": "MGMT_FEE_MISMATCH",
-    "docs": "",
-    "detail": "",
-    "evidence": "",
-    "why_it_matters": "",
-    "question_to_ask": ""
+    "docs": "lpa_agreement.txt vs quarterly_update.txt",
+    "detail": "Management fee differs: 1.50% vs 2.00%",
+    "evidence": "lpa_agreement.txt: Management Fee: 1.50% | quarterly_update.txt: Management Fee: 2.00%",
+    "why_it_matters": "Fee terms directly affect net returns and legal obligations; LPA typically governs.",
+    "question_to_ask": "Confirm the controlling fee schedule and whether any side-letter modifies the base fee."
   }
 ]

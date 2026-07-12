@@ -44,7 +44,7 @@ brew install java
 
 cp .env.example .env
 
-# edit .env to set COHERE_API_KEY
+# edit .env to set CO_API_KEY
 
 pip install -e .
 

@@ -3,20 +3,19 @@ from pathlib import Path
 import json
 import typer
 from dotenv import load_dotenv
-import pandas as pd 
+import pandas as pd
 from typing import List
 
 from ddgpt.config import Config
 from ddgpt.utils.logging import setup_logger
 from ddgpt.pipeline.orchestrator import DiligencePipeline
-from ddgpt.extract.regex_extractor import RegexExtractor
-from ddgpt.extract.cohere_extractor import CohereExtractor
-from ddgpt.rules.numeric_mismatch import NumericMismatchRule
-from ddgpt.rules.definition_drift import DefinitionDriftRule
 from ddgpt.pipeline.builders import build_extractors, build_rules
 from ddgpt.risk.engine import RiskEngine
 from ddgpt.copilot.ic_copilot import ICCopilot
+from ddgpt.copilot.recommendation_engine import determine_recommendation
 from ddgpt.report.tables import to_facts_table
+from ddgpt.render.pdf_report import render_ic_pdf
+from ddgpt.provenance.audit import build_inputs_manifest
 from ddgpt.io.loaders import load_document
 
 app = typer.Typer(add_completion=False, help="DDGPT — Diligence extraction + contradiction flags (Cohere).")
@@ -38,6 +37,12 @@ def _load_cfg(config_path: str | None) -> Config:
     import yaml
     return Config.model_validate(yaml.safe_load(p.read_text(encoding="utf-8")))
 
+def _load_docs(cfg: Config, paths: List[str]):
+    return [
+        load_document(p, ocr_enabled=cfg.ocr.enabled, ocr_dpi=cfg.ocr.dpi)
+        for p in paths
+    ]
+
 @app.command()
 def run(
     input: str = typer.Option("sample_docs", "--input"),
@@ -48,50 +53,51 @@ def run(
     cfg = _load_cfg(config)
     logger = setup_logger(str(Path(out) / "run.log"))
 
-    # Build extractors
-    prompt_text = (Path(cfg.run.prompts_dir) / cfg.run.extract_prompt).read_text()
-
-    extractors = []
-    if cfg.run.use_cohere:
-        extractors.append(
-            CohereExtractor(cfg.model.model, cfg.model.temperature, prompt_text)
-        )
-    extractors.append(RegexExtractor())
-
-    # Build rules
-    rules = [
-        NumericMismatchRule(
-            cfg.rules.aum_tolerance_pct,
-            cfg.rules.mgmt_fee_abs_pct,
-            cfg.rules.target_irr_abs_pct
-        ),
-        DefinitionDriftRule()
-    ]
-
-    # Build pipeline
+    extractors = build_extractors(cfg)
+    rules = build_rules(cfg)
     pipeline = DiligencePipeline(extractors, rules)
 
-    # Load documents
     paths = discover_files(input)
-    docs = [load_document(p) for p in paths]
+    docs = _load_docs(cfg, paths)
 
-    # Run pipeline
     result = pipeline.run(docs)
 
-    # Save outputs
-    Path(out).mkdir(parents=True, exist_ok=True)
+    out_path = Path(out)
+    out_path.mkdir(parents=True, exist_ok=True)
 
-    (Path(out) / "extracted.json").write_text(
+    (out_path / "config.json").write_text(json.dumps(cfg.dict(), indent=2))
+
+    (out_path / "inputs.json").write_text(
+        json.dumps([m.dict() for m in build_inputs_manifest(paths)], indent=2)
+    )
+
+    (out_path / "extracted.json").write_text(
         json.dumps(result["extracted"], indent=2)
     )
 
-    (Path(out) / "flags.json").write_text(
+    (out_path / "flags.json").write_text(
         json.dumps(result["flags"], indent=2)
     )
 
-    (Path(out) / "ic_memo.md").write_text(result["ic_memo"])
+    (out_path / "ic_memo.md").write_text(result["ic_memo"])
 
-    logger.info("✅ run complete (new pipeline)")
+    facts_df = to_facts_table(result["extracted"])
+    facts_df.to_csv(out_path / "facts_table.csv", index=False)
+
+    if cfg.run.enable_pdf_output:
+        render_ic_pdf(
+            output_path=str(out_path / "ic_memo.pdf"),
+            memo=result["ic_memo"],
+            flags=result["flags"],
+            facts_df=facts_df,
+            risk_score=result["risk_score"]
+        )
+
+    logger.info(
+        f"✅ run complete | docs={len(docs)} | flags={len(result['flags'])} | "
+        f"risk_score={result['risk_score']:.3f} | "
+        f"recommendation={result['recommendation']['decision']}"
+    )
 
 @app.command()
 def extract(
@@ -102,19 +108,19 @@ def extract(
     load_dotenv()
     cfg = _load_cfg(config)
     logger = setup_logger(str(Path(out) / "run.log"))
-    
+
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
 
     pipeline = DiligencePipeline(extractors, rules)
 
     paths = discover_files(input)
-    docs = [load_document(p) for p in paths]
+    docs = _load_docs(cfg, paths)
 
     extracted = []
-    for doc_name, pages in docs:
-        doc = pipeline.extractor.extract(doc_name, pages)
-        extracted.append(doc.dict())
+    for doc in docs:
+        extracted_doc = pipeline.extractor.extract(doc.doc_name, doc.pages, doc.tables, doc.layout)
+        extracted.append(extracted_doc.dict())
 
     Path(out).mkdir(parents=True, exist_ok=True)
     (Path(out) / "extracted.json").write_text(json.dumps(extracted, indent=2))
@@ -133,7 +139,7 @@ def flag(
     extracted_path = Path(out) / "extracted.json"
     if not extracted_path.exists():
         raise typer.BadParameter(f"Missing extracted.json in {out}. Run extract first.")
-    
+
     extracted = json.loads(extracted_path.read_text(encoding="utf-8"))
 
     rules = build_rules(cfg)
@@ -157,19 +163,28 @@ def report(
     logger = setup_logger(str(Path(out) / "run.log"))
     extracted = json.loads((Path(out)/"extracted.json").read_text(encoding="utf-8"))
     flags = json.loads((Path(out)/"flags.json").read_text(encoding="utf-8")) if (Path(out)/"flags.json").exists() else []
-    
-    extracted = json.loads((Path(out)/"extracted.json").read_text())
-    flags = json.loads((Path(out)/"flags.json").read_text()) if (Path(out)/"flags.json").exists() else []
 
     # structured table
     df = to_facts_table(extracted)
     df.to_csv(Path(out) / "facts_table.csv", index=False)
 
-    # IC copilot
+    recommendation = determine_recommendation(flags)
+    risk_score = RiskEngine.score_from_severities([f["severity"] for f in flags])
+
+    # IC copilot (falls back to a deterministic template if CO_API_KEY is unset)
     copilot = ICCopilot()
-    memo = copilot.generate(extracted, flags)
+    memo = copilot.generate(extracted, flags, recommendation=recommendation)
 
     (Path(out) / "ic_memo.md").write_text(memo)
+
+    if cfg.run.enable_pdf_output:
+        render_ic_pdf(
+            output_path=str(Path(out) / "ic_memo.pdf"),
+            memo=memo,
+            flags=flags,
+            facts_df=df,
+            risk_score=risk_score
+        )
 
     logger.info("✅ reports written (table + IC memo)")
 
@@ -188,7 +203,7 @@ def eval(
 
     input_dir = Path(scenario) / "input"
     paths = discover_files(str(input_dir))
-    docs = [load_document(p) for p in paths]
+    docs = _load_docs(cfg, paths)
 
     result = pipeline.run(docs)
 
@@ -204,13 +219,13 @@ def eval(
         expected = json.loads(expected_path.read_text())
         actual = result["flags"]
 
-        exp_types = sorted([f["type"] for f in expected])
-        act_types = sorted([f["type"] for f in actual])
+        exp_pairs = sorted([(f["type"], f["severity"]) for f in expected])
+        act_pairs = sorted([(f["type"], f["severity"]) for f in actual])
 
-        if exp_types == act_types:
+        if exp_pairs == act_pairs:
             logger.info("eval PASS")
         else:
-            logger.info(f"eval FAIL\nexpected={exp_types}\nactual={act_types}")
+            logger.info(f"eval FAIL\nexpected={exp_pairs}\nactual={act_pairs}")
 
 if __name__ == "__main__":
     app()

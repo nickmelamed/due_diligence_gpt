@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from ddgpt.copilot.recommendation_engine import determine_recommendation
 
 def _fmt_money(x):
     if x is None:
@@ -10,7 +11,12 @@ def _fmt_money(x):
         return f"${x/1e6:.2f}M"
     return f"${x:,.0f}"
 
-def generate_ic_summary(extracted: List[Dict[str, Any]], flags: List[Dict[str, Any]], memo_prompt: str | None = None) -> str:
+def generate_ic_summary(
+    extracted: List[Dict[str, Any]],
+    flags: List[Dict[str, Any]],
+    memo_prompt: str | None = None,
+    recommendation: Optional[Dict[str, Any]] = None,
+) -> str:
     lines = []
     lines.append("# IC Diligence Summary")
     lines.append("")
@@ -20,6 +26,13 @@ def generate_ic_summary(extracted: List[Dict[str, Any]], flags: List[Dict[str, A
     red = sum(1 for f in flags if f["severity"] == "RED")
     yellow = sum(1 for f in flags if f["severity"] == "YELLOW")
     lines.append(f"- Flags detected: **{red} RED**, **{yellow} YELLOW**")
+
+    if recommendation is None:
+        recommendation = determine_recommendation(flags)
+    lines.append(
+        f'- Recommendation: **{recommendation["decision"]}** '
+        f'(confidence {recommendation["confidence"]:.2f})'
+    )
     lines.append("")
 
     lines.append("## Key Metrics by Source")

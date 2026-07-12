@@ -5,25 +5,20 @@ import pytesseract
 from PIL import Image
 import io
 
-from ddgpt.io.loaders import Page
+DEFAULT_OCR_DPI = 300
 
-def ocr_pdf(path: str):
+
+def ocr_page_image(page, dpi: int = DEFAULT_OCR_DPI) -> str:
+    """OCR a single already-open fitz page object; returns extracted text."""
+    pix = page.get_pixmap(dpi=dpi)
+    img = Image.open(io.BytesIO(pix.tobytes("png")))
+    return pytesseract.image_to_string(img)
+
+
+def ocr_pdf(path: str, dpi: int = DEFAULT_OCR_DPI):
+    """OCR every page of a PDF from scratch. Returns a list of (page_num, text)."""
     doc = fitz.open(path)
-
-    pages = []
-
-    for i, page in enumerate(doc):
-        pix = page.get_pixmap(dpi=300)
-
-        img = Image.open(io.BytesIO(pix.tobytes("png")))
-
-        text = pytesseract.image_to_string(img)
-
-        pages.append(
-            Page(
-                page_num=i + 1,
-                text=text
-            )
-        )
-
-    return pages
+    try:
+        return [(i + 1, ocr_page_image(page, dpi=dpi)) for i, page in enumerate(doc)]
+    finally:
+        doc.close()

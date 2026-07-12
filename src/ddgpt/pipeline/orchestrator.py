@@ -19,7 +19,8 @@ class DiligencePipeline:
             extracted_doc = self.extractor.extract(
                 doc.doc_name,
                 doc.pages,
-                doc.tables
+                doc.tables,
+                doc.layout
             )
 
             extracted_doc = verify_and_score(
@@ -39,7 +40,8 @@ class DiligencePipeline:
 
         memo = self.copilot.generate(
             extracted,
-            [f.dict() for f in flags]
+            [f.dict() for f in flags],
+            recommendation=recommendation
         )
 
         return {

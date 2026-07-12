@@ -33,6 +33,31 @@ warnings.filterwarnings(
     message="CropBox missing from /Page"
 )
 
+# Cohere client + extractor/rule/pipeline construction is expensive and
+# stateless across uploads -- build it once per server process instead of
+# once per rerun.
+@st.cache_resource(show_spinner=False)
+def _get_pipeline():
+    cfg = Config()
+    extractors = build_extractors(cfg)
+    rules = build_rules(cfg)
+    return cfg, DiligencePipeline(extractors, rules)
+
+# PDF parsing, OCR, and table extraction (Camelot/pdfplumber) are all CPU-heavy
+# and deterministic for a given file's bytes -- cache on content, not on the
+# throwaway temp-file path, so the same upload is never reparsed.
+@st.cache_data(show_spinner=False)
+def _load_document_cached(file_bytes: bytes, file_name: str, ocr_enabled: bool, ocr_dpi: int):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(file_bytes)
+        tmp.flush()
+        loaded = load_document(tmp.name, ocr_enabled=ocr_enabled, ocr_dpi=ocr_dpi)
+
+    # load_document derives doc_name from the temp path; restore the
+    # user's real filename so authority weighting (which keys off
+    # doc_name substrings like "lpa"/"quarter"/"deck") actually works.
+    return loaded.model_copy(update={"doc_name": file_name})
+
 st.set_page_config(
     page_title="DDGPT",
     layout="wide"
@@ -139,31 +164,17 @@ if uploaded:
             "Running institutional diligence pipeline..."
         ):
 
+            cfg, pipeline = _get_pipeline()
+
             for f in uploaded:
-
-                with tempfile.NamedTemporaryFile(
-                    delete=False,
-                    suffix=".pdf"
-                ) as tmp:
-
-                    tmp.write(f.read())
-
-                    tmp.flush()
-
-                    docs.append(
-                        load_document(tmp.name)
+                docs.append(
+                    _load_document_cached(
+                        f.getvalue(),
+                        f.name,
+                        cfg.ocr.enabled,
+                        cfg.ocr.dpi,
                     )
-
-            cfg = Config()
-
-            extractors = build_extractors(cfg)
-
-            rules = build_rules(cfg)
-
-            pipeline = DiligencePipeline(
-                extractors,
-                rules
-            )
+                )
 
             result = pipeline.run(docs)
 
@@ -207,18 +218,17 @@ if st.session_state.result:
             f"{result['risk_score']:.2f}"
         )
 
-    recommendation = "INVESTIGATE"
-
-    if result["risk_score"] < 0.3:
-        recommendation = "PROCEED"
-
-    elif result["risk_score"] > 0.7:
-        recommendation = "HIGH RISK"
+    # Use the same deterministic recommendation shown in the IC memo below --
+    # this used to be a second, disconnected risk_score-threshold heuristic
+    # (PROCEED/INVESTIGATE/HIGH RISK) that could show a different verdict
+    # than the memo's (APPROVE/INVESTIGATE/PASS) for the same run.
+    recommendation = result["recommendation"]["decision"]
 
     with col2:
         st.metric(
             "Recommendation",
-            recommendation
+            recommendation,
+            help=f'Confidence: {result["recommendation"]["confidence"]:.2f}'
         )
 
     with col3:

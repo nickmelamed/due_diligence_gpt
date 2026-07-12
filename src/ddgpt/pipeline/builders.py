@@ -1,15 +1,17 @@
+import os
 from pathlib import Path
 from ddgpt.extract.regex_extractor import RegexExtractor
 from ddgpt.extract.cohere_extractor import CohereExtractor
 from ddgpt.rules.numeric_mismatch import NumericMismatchRule
 from ddgpt.rules.definition_drift import DefinitionDriftRule
 from ddgpt.rules.internal_inconsistency import InternalInconsistencyRule
+from ddgpt.rules.extractor_disagreement import ExtractorDisagreementRule
 
 def build_extractors(cfg):
     prompt_text = (Path(cfg.run.prompts_dir) / cfg.run.extract_prompt).read_text()
 
     extractors = []
-    if cfg.run.use_cohere:
+    if cfg.run.use_cohere and os.getenv("CO_API_KEY"):
         extractors.append(
             CohereExtractor(cfg.model.model, cfg.model.temperature, prompt_text)
         )
@@ -27,4 +29,5 @@ def build_rules(cfg):
         ),
         DefinitionDriftRule(),
         InternalInconsistencyRule(),
+        ExtractorDisagreementRule(),
     ]

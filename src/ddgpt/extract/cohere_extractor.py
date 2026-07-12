@@ -1,7 +1,6 @@
 from __future__ import annotations
 import json
 import os
-import re
 from typing import List
 
 from ddgpt.io.loaders import Page
@@ -14,6 +13,14 @@ try:
     import cohere
 except Exception:
     cohere = None
+
+# Conservative character budget per call. Long LPAs/quarterly reports can run
+# well past a single context window; rather than silently truncating (and
+# losing whatever field lives past the cutoff), the document is split into
+# page-aligned chunks and results are merged field-by-field.
+MAX_CHARS_PER_CALL = 60_000
+
+METRIC_FIELDS = ["aum", "net_irr", "tvpi", "target_irr", "mgmt_fee", "carry"]
 
 class CohereExtractor(Extractor):
     def __init__(self, model: str, temperature: float, prompt_text: str):
@@ -71,7 +78,7 @@ class CohereExtractor(Extractor):
                 "snippet": ""
             })
 
-        # management fee 
+        # management fee
         if "mgmt_fee" not in data or not isinstance(data["mgmt_fee"], dict):
             data["mgmt_fee"] = {}
 
@@ -100,6 +107,34 @@ class CohereExtractor(Extractor):
         return data
 
     def extract(self, doc_name: str, pages: List[Page]) -> ExtractedDoc:
+        chunks = self._chunk_pages(pages)
+
+        if len(chunks) == 1:
+            return self._extract_chunk(doc_name, chunks[0])
+
+        chunk_docs = [self._extract_chunk(doc_name, chunk) for chunk in chunks]
+        return self._merge_chunks(doc_name, chunk_docs)
+
+    def _chunk_pages(self, pages: List[Page]) -> List[List[Page]]:
+        chunks: List[List[Page]] = []
+        current: List[Page] = []
+        current_len = 0
+
+        for page in pages:
+            page_len = len(page.text or "")
+            if current and current_len + page_len > MAX_CHARS_PER_CALL:
+                chunks.append(current)
+                current = []
+                current_len = 0
+            current.append(page)
+            current_len += page_len
+
+        if current:
+            chunks.append(current)
+
+        return chunks or [pages]
+
+    def _extract_chunk(self, doc_name: str, pages: List[Page]) -> ExtractedDoc:
         pages_block = "\n\n".join([f"--- PAGE {p.page_num} ---\n{p.text}" for p in pages])
 
         schema_hint = {
@@ -123,19 +158,23 @@ SCHEMA EXAMPLE (shape only):
 DOCUMENT:
 {pages_block}
 """.strip()
-        
+
         for attempt in range(3):
             try:
-                resp = self.client.chat(model=self.model, 
-                                        message=msg, 
+                resp = self.client.chat(model=self.model,
+                                        message=msg,
                                         temperature=self.temperature)
                 text = resp.text.strip()
-                
+
                 data = safe_parse_json(text)
                 data = self._sanitize(data)
+                # doc_name must always be the real filename, never whatever
+                # title/name the model decided to report -- it drives
+                # authority weighting and cross-document flag labeling.
+                data["doc_name"] = doc_name
 
                 return ExtractedDoc.model_validate(data)
-            
+
             except Exception as e:
                 print(f" Attempt {attempt + 1} failed: {e}")
 
@@ -143,6 +182,39 @@ DOCUMENT:
                     print("Falling back to regex extraction")
                     return RegexExtractor().extract(doc_name, pages)
 
+    def _merge_chunks(self, doc_name: str, chunk_docs: List[ExtractedDoc]) -> ExtractedDoc:
+        merged = ExtractedDoc(doc_name=doc_name)
 
+        for doc in chunk_docs:
+            if doc.doc_date:
+                merged.doc_date = doc.doc_date
+                break
 
-        
+        for metric_name in METRIC_FIELDS:
+            best = None
+            for doc in chunk_docs:
+                metric = getattr(doc, metric_name)
+                if metric.value is None:
+                    continue
+                if best is None or metric.confidence > best.confidence:
+                    best = metric
+            if best is not None:
+                setattr(merged, metric_name, best)
+
+        notes: List[str] = []
+        for doc in chunk_docs:
+            for n in doc.notes:
+                if n not in notes:
+                    notes.append(n)
+        notes.append(f"Document processed in {len(chunk_docs)} chunks due to length.")
+        merged.notes = notes
+
+        missing: List[str] = []
+        for metric_name in METRIC_FIELDS:
+            if getattr(merged, metric_name).value is None:
+                missing.append(f"{metric_name}.value")
+        if merged.carry.hurdle is None:
+            missing.append("carry.hurdle")
+        merged.missing_fields = missing
+
+        return merged
