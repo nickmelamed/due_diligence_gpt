@@ -51,9 +51,14 @@ def infer_irr_basis(pages: List[Page], layout: Optional[DocumentLayout]) -> Opti
     sections (e.g. plain-text inputs).
     """
     if layout and layout.sections:
+        def _priority(section):
+            if section.canonical_type in PRIORITY_SECTION_TYPES:
+                return PRIORITY_SECTION_TYPES.index(section.canonical_type)
+            return len(PRIORITY_SECTION_TYPES)
+
         ordered_sections = sorted(
             layout.sections,
-            key=lambda s: (s.canonical_type not in PRIORITY_SECTION_TYPES, s.page_start),
+            key=lambda s: (_priority(s), s.page_start),
         )
         for section in ordered_sections:
             basis, snippet = _scan_text_for_basis(section.text)

@@ -5,10 +5,13 @@ from ddgpt.pipeline.scoring import compute_agreement
 from ddgpt.provenance.evidence import Evidence
 from ddgpt.layout.definitions import infer_irr_basis
 from ddgpt.extract.schemas import DefinitionContext
+from ddgpt.utils.redaction import redact_pages
+from ddgpt.utils.cache import disk_cached, content_hash
 
-EXTRACTOR_WEIGHTS = {
+DEFAULT_EXTRACTOR_WEIGHTS = {
     "RegexExtractor": 0.95,
     "CohereExtractor": 0.70,
+    "OllamaExtractor": 0.60,
 }
 
 # Below this agreement score, two extractors are treated as having actively
@@ -24,16 +27,28 @@ TABLE_METRIC_FIELDS = {
 }
 
 class FusionExtractor:
-    def __init__(self, extractors):
+    def __init__(self, extractors, extractor_weights=None, extractor_default_weight=0.50,
+                 cache_dir=None, enable_disk_cache=False):
         self.extractors = extractors
 
         self.table_parser = FinancialTableParser()
 
-    def extract(self, doc_name, pages, tables, layout=None):
+        self.extractor_weights = extractor_weights or DEFAULT_EXTRACTOR_WEIGHTS
+        self.extractor_default_weight = extractor_default_weight
+
+        self.cache_dir = cache_dir
+        self.enable_disk_cache = enable_disk_cache and cache_dir is not None
+
+    def extract(self, doc_name, pages, tables, layout=None, redact_for_llm=False):
         results = []
 
+        redacted_pages = redact_pages(pages) if redact_for_llm else pages
+
         for extractor in self.extractors:
-            doc = extractor.extract(doc_name, pages)
+            is_llm_backed = getattr(extractor, "IS_LLM_BACKED", False)
+            extractor_pages = redacted_pages if is_llm_backed else pages
+
+            doc = self._extract_with_cache(extractor, doc_name, extractor_pages)
 
             results.append(
                 (extractor.__class__.__name__, doc)
@@ -73,6 +88,31 @@ class FusionExtractor:
 
         return base
 
+    def _extract_with_cache(self, extractor, doc_name, pages):
+        """Caches per-extractor results on disk, keyed on extractor class +
+        model/prompt config + page text. Skips a Cohere/Ollama call entirely
+        (the expensive, costly part) when the same document has already been
+        processed with the same prompt/model -- not just the CPU-bound
+        parsing steps."""
+        if not self.enable_disk_cache:
+            return extractor.extract(doc_name, pages)
+
+        page_blob = "\n".join(p.text or "" for p in pages)
+        key = content_hash(
+            extractor.__class__.__name__,
+            str(getattr(extractor, "model", "")),
+            str(getattr(extractor, "temperature", "")),
+            str(getattr(extractor, "prompt_text", "")),
+            page_blob,
+        )
+
+        return disk_cached(
+            self.cache_dir,
+            "extractions",
+            key,
+            lambda: extractor.extract(doc_name, pages),
+        )
+
     def _build_definition_context(self, pages, layout):
         context = infer_irr_basis(pages, layout)
         if context is None:
@@ -90,9 +130,9 @@ class FusionExtractor:
         for extractor_name, doc in docs:
             metric = getattr(doc, metric_name)
 
-            weight = EXTRACTOR_WEIGHTS.get(
+            weight = self.extractor_weights.get(
                 extractor_name,
-                0.50
+                self.extractor_default_weight
             )
 
             score = metric.confidence * weight

@@ -7,13 +7,34 @@ from pathlib import Path
 
 from ddgpt.extract.tables.table_models import ExtractedTable
 
+# "lattice" finds ruled/bordered tables; many real fund reports use
+# borderless tables (whitespace-aligned columns), which lattice simply
+# returns nothing for. Falling back to "stream" catches those instead of
+# silently producing no tables at all.
+FLAVOR_CONFIDENCE = {
+    "lattice": 0.85,
+    "stream": 0.65,
+}
+
 class CamelotTableExtractor:
     def extract(self, pdf_path: str):
-        tables = camelot.read_pdf(
-            pdf_path,
-            pages="all",
-            flavor="lattice"
-        )
+        for flavor in ("lattice", "stream"):
+            extracted = self._extract_with_flavor(pdf_path, flavor)
+            if extracted:
+                return extracted
+
+        return []
+
+    def _extract_with_flavor(self, pdf_path: str, flavor: str):
+        try:
+            tables = camelot.read_pdf(
+                pdf_path,
+                pages="all",
+                flavor=flavor
+            )
+        except Exception as e:
+            print(f"camelot ({flavor}) failed: {e}")
+            return []
 
         extracted = []
 
@@ -37,12 +58,12 @@ class CamelotTableExtractor:
 
             extracted.append(
                 ExtractedTable(
-                    table_id=f"table_{idx}",
+                    table_id=f"{flavor}_{idx}",
                     page=table.page,
                     headers=headers,
                     rows=rows,
                     raw_text=df.to_string(),
-                    confidence=0.85
+                    confidence=FLAVOR_CONFIDENCE[flavor]
                 )
             )
 

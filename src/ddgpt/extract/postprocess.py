@@ -14,25 +14,26 @@ from ddgpt.pipeline.scoring import final_confidence
 # "not found" -- a strict verbatim-substring bar has no tolerance for either.
 FUZZY_MATCH_THRESHOLD = 0.80
 
-AUTHORITY_WEIGHTS = [
-    ("lpa", 0.98),
-    ("agreement", 0.95),
-    ("audited", 0.93),
-    ("financial", 0.90),
-    ("statement", 0.85),
-    ("quarter", 0.75),
-    ("update", 0.70),
-    ("deck", 0.55),
-]
+DEFAULT_AUTHORITY_WEIGHTS = {
+    "lpa": 0.98,
+    "agreement": 0.95,
+    "audited": 0.93,
+    "financial": 0.90,
+    "statement": 0.85,
+    "quarter": 0.75,
+    "update": 0.70,
+    "deck": 0.55,
+}
 
-def authority_weight(doc_name: str) -> float:
+def authority_weight(doc_name: str, weights: dict | None = None, default: float = 0.50) -> float:
     name = doc_name.lower()
+    weights = weights or DEFAULT_AUTHORITY_WEIGHTS
 
-    for key, weight in AUTHORITY_WEIGHTS:
+    for key, weight in weights.items():
         if key in name:
             return weight
 
-    return 0.50
+    return default
 
 def temporal_weight(doc_date: str | None) -> float:
     if not doc_date:
@@ -117,8 +118,13 @@ def verify_metric(metric, key: str, pages, authority, recency, notes, missing_fi
         recency=recency
     ) * evidence_score
 
-def verify_and_score(doc: ExtractedDoc, pages: List[Page]) -> ExtractedDoc:
-    authority = authority_weight(doc.doc_name)
+def verify_and_score(
+    doc: ExtractedDoc,
+    pages: List[Page],
+    authority_weights: dict | None = None,
+    authority_default_weight: float = 0.50,
+) -> ExtractedDoc:
+    authority = authority_weight(doc.doc_name, authority_weights, authority_default_weight)
     recency = temporal_weight(doc.doc_date)
 
     verify_metric(

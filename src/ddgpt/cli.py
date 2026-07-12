@@ -8,8 +8,8 @@ from typing import List
 
 from ddgpt.config import Config
 from ddgpt.utils.logging import setup_logger
-from ddgpt.pipeline.orchestrator import DiligencePipeline
-from ddgpt.pipeline.builders import build_extractors, build_rules
+from ddgpt.utils.cache import disk_cached, content_hash
+from ddgpt.pipeline.builders import build_extractors, build_rules, build_pipeline
 from ddgpt.risk.engine import RiskEngine
 from ddgpt.copilot.ic_copilot import ICCopilot
 from ddgpt.copilot.recommendation_engine import determine_recommendation
@@ -38,10 +38,23 @@ def _load_cfg(config_path: str | None) -> Config:
     return Config.model_validate(yaml.safe_load(p.read_text(encoding="utf-8")))
 
 def _load_docs(cfg: Config, paths: List[str]):
-    return [
-        load_document(p, ocr_enabled=cfg.ocr.enabled, ocr_dpi=cfg.ocr.dpi)
-        for p in paths
-    ]
+    docs = []
+
+    for p in paths:
+        file_bytes = Path(p).read_bytes()
+        key = content_hash(file_bytes, str(cfg.ocr.enabled), str(cfg.ocr.dpi))
+
+        docs.append(
+            disk_cached(
+                cfg.run.cache_dir,
+                "loaded_documents",
+                key,
+                lambda p=p: load_document(p, ocr_enabled=cfg.ocr.enabled, ocr_dpi=cfg.ocr.dpi),
+                enabled=cfg.run.enable_disk_cache,
+            )
+        )
+
+    return docs
 
 @app.command()
 def run(
@@ -55,7 +68,7 @@ def run(
 
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
-    pipeline = DiligencePipeline(extractors, rules)
+    pipeline = build_pipeline(cfg, extractors, rules)
 
     paths = discover_files(input)
     docs = _load_docs(cfg, paths)
@@ -112,7 +125,7 @@ def extract(
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
 
-    pipeline = DiligencePipeline(extractors, rules)
+    pipeline = build_pipeline(cfg, extractors, rules)
 
     paths = discover_files(input)
     docs = _load_docs(cfg, paths)
@@ -199,7 +212,7 @@ def eval(
 
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
-    pipeline = DiligencePipeline(extractors, rules)
+    pipeline = build_pipeline(cfg, extractors, rules)
 
     input_dir = Path(scenario) / "input"
     paths = discover_files(str(input_dir))

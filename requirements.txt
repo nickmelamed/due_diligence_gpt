@@ -1,6 +1,7 @@
 # installs: brew install tesseract, ghostscript, java
 
 cohere>=5.0.0
+requests>=2.28.0
 pypdf>=4.0.0
 pydantic>=2.0.0
 pyyaml>=6.0.0

@@ -1,16 +1,15 @@
 import streamlit as st
+import os
 import tempfile
 import warnings
+from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
 
 from ddgpt.pipeline.builders import (
     build_extractors,
-    build_rules
-)
-
-from ddgpt.pipeline.orchestrator import (
-    DiligencePipeline
+    build_rules,
+    build_pipeline
 )
 
 from ddgpt.config import Config
@@ -41,7 +40,7 @@ def _get_pipeline():
     cfg = Config()
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
-    return cfg, DiligencePipeline(extractors, rules)
+    return cfg, build_pipeline(cfg, extractors, rules)
 
 # PDF parsing, OCR, and table extraction (Camelot/pdfplumber) are all CPU-heavy
 # and deterministic for a given file's bytes -- cache on content, not on the
@@ -63,7 +62,34 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS 
+# Access Gate
+#
+# Streamlit has no built-in auth, and this dashboard handles confidential
+# diligence documents. If DDGPT_DASHBOARD_PASSWORD is set, gate the whole
+# app behind it; if unset, behave exactly as before (local/dev use).
+
+_dashboard_password = os.getenv("DDGPT_DASHBOARD_PASSWORD")
+
+if _dashboard_password:
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.title("Due Diligence GPT")
+        st.caption("This dashboard handles confidential diligence documents. Sign in to continue.")
+
+        entered_password = st.text_input("Password", type="password")
+
+        if st.button("Sign in"):
+            if entered_password == _dashboard_password:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password.")
+
+        st.stop()
+
+# Custom CSS
 
 st.markdown("""
 <style>
@@ -182,19 +208,20 @@ if uploaded:
                 result["extracted"]
             )
 
-            render_ic_pdf(
-                output_path="ic_memo.pdf",
-                memo=result["ic_memo"],
-                flags=result["flags"],
-                facts_df=facts_df,
-                risk_score=result["risk_score"]
-            )
+            # Write to a temp path, not a relative "ic_memo.pdf" -- the
+            # latter silently overwrites the sample ic_memo.pdf checked into
+            # the repo root whenever this app is launched from there.
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_tmp:
+                render_ic_pdf(
+                    output_path=pdf_tmp.name,
+                    memo=result["ic_memo"],
+                    flags=result["flags"],
+                    facts_df=facts_df,
+                    risk_score=result["risk_score"]
+                )
 
-            with open(
-                "ic_memo.pdf",
-                "rb"
-            ) as f:
-                pdf_bytes = f.read()
+                pdf_tmp.seek(0)
+                pdf_bytes = Path(pdf_tmp.name).read_bytes()
 
             st.session_state.result = result
             st.session_state.pdf_bytes = pdf_bytes
