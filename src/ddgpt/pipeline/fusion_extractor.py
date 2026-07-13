@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from ddgpt.extract.tables.financial_table_parser import FinancialTableParser
 from ddgpt.pipeline.scoring import compute_agreement
 from ddgpt.provenance.evidence import Evidence
@@ -29,10 +31,11 @@ TABLE_METRIC_FIELDS = {
 
 class FusionExtractor:
     def __init__(self, extractors, extractor_weights=None, extractor_default_weight=0.50,
-                 cache_dir=None, enable_disk_cache=False):
+                 cache_dir=None, enable_disk_cache=False, chart_extractor=None):
         self.extractors = extractors
 
         self.table_parser = FinancialTableParser()
+        self.chart_extractor = chart_extractor
 
         self.extractor_weights = extractor_weights or DEFAULT_EXTRACTOR_WEIGHTS
         self.extractor_default_weight = extractor_default_weight
@@ -40,7 +43,7 @@ class FusionExtractor:
         self.cache_dir = cache_dir
         self.enable_disk_cache = enable_disk_cache and cache_dir is not None
 
-    def extract(self, doc_name, pages, tables, layout=None, redact_for_llm=False):
+    def extract(self, doc_name, pages, tables, layout=None, redact_for_llm=False, path=None):
         results = []
 
         redacted_pages = redact_pages(pages) if redact_for_llm else pages
@@ -90,7 +93,39 @@ class FusionExtractor:
         if layout is not None:
             base.sections_detected = layout.canonical_types_found()
 
+        if self.chart_extractor is not None and path is not None:
+            if redact_for_llm:
+                # Unlike text (redact_pages), a page image can't be selectively
+                # redacted before sending it to a vision model -- skip the
+                # extractor entirely rather than leak whatever sensitive text
+                # is rendered into the chart/page image.
+                base.notes.append(
+                    "Chart/graph extraction skipped: redact_before_llm is enabled and page "
+                    "images cannot be redacted the way text can."
+                )
+            else:
+                base.chart_extractions = self._extract_charts_with_cache(doc_name, path)
+
         return base
+
+    def _extract_charts_with_cache(self, doc_name, path):
+        if not self.enable_disk_cache:
+            return self.chart_extractor.extract_charts(doc_name, path)
+
+        file_bytes = Path(path).read_bytes()
+        key = content_hash(
+            "VisionChartExtractor",
+            str(getattr(self.chart_extractor, "model", "")),
+            str(getattr(self.chart_extractor, "prompt_text", "")),
+            file_bytes,
+        )
+
+        return disk_cached(
+            self.cache_dir,
+            "chart_extractions",
+            key,
+            lambda: self.chart_extractor.extract_charts(doc_name, path),
+        )
 
     def _extract_with_cache(self, extractor, doc_name, pages):
         """Caches per-extractor results on disk, keyed on extractor class +

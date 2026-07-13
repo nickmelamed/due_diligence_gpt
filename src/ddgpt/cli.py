@@ -10,7 +10,7 @@ from typing import List
 from ddgpt.config import Config
 from ddgpt.utils.logging import setup_logger
 from ddgpt.utils.cache import disk_cached, content_hash
-from ddgpt.pipeline.builders import build_extractors, build_rules, build_pipeline, extractor_availability
+from ddgpt.pipeline.builders import build_extractors, build_rules, build_pipeline, build_chart_extractor, extractor_availability
 from ddgpt.risk.engine import RiskEngine
 from ddgpt.copilot.ic_copilot import ICCopilot
 from ddgpt.copilot.recommendation_engine import determine_recommendation
@@ -69,7 +69,8 @@ def run(
 
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
-    pipeline = build_pipeline(cfg, extractors, rules)
+    chart_extractor = build_chart_extractor(cfg)
+    pipeline = build_pipeline(cfg, extractors, rules, chart_extractor=chart_extractor)
 
     avail = extractor_availability(cfg)
     for name, status in avail.items():
@@ -165,15 +166,16 @@ def extract(
 
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
+    chart_extractor = build_chart_extractor(cfg)
 
-    pipeline = build_pipeline(cfg, extractors, rules)
+    pipeline = build_pipeline(cfg, extractors, rules, chart_extractor=chart_extractor)
 
     paths = discover_files(input)
     docs = _load_docs(cfg, paths)
 
     extracted = []
     for doc in docs:
-        extracted_doc = pipeline.extractor.extract(doc.doc_name, doc.pages, doc.tables, doc.layout)
+        extracted_doc = pipeline.extractor.extract(doc.doc_name, doc.pages, doc.tables, doc.layout, path=doc.path)
         extracted.append(extracted_doc.dict())
 
     Path(out).mkdir(parents=True, exist_ok=True)
@@ -255,7 +257,8 @@ def eval(
 
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
-    pipeline = build_pipeline(cfg, extractors, rules)
+    chart_extractor = build_chart_extractor(cfg)
+    pipeline = build_pipeline(cfg, extractors, rules, chart_extractor=chart_extractor)
 
     input_dir = Path(scenario) / "input"
     paths = discover_files(str(input_dir))

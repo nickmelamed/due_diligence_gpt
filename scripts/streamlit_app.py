@@ -9,6 +9,7 @@ from ddgpt.pipeline.builders import (
     build_extractors,
     build_rules,
     build_pipeline,
+    build_chart_extractor,
     extractor_availability
 )
 
@@ -36,7 +37,8 @@ def _get_pipeline():
     cfg = Config()
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
-    return cfg, build_pipeline(cfg, extractors, rules)
+    chart_extractor = build_chart_extractor(cfg)
+    return cfg, build_pipeline(cfg, extractors, rules, chart_extractor=chart_extractor)
 
 # PDF parsing, OCR, and table extraction (Camelot/pdfplumber) are all CPU-heavy
 # and deterministic for a given file's bytes -- cache on content, not on the
@@ -445,6 +447,22 @@ if st.session_state.result:
             sections_detected = doc.get("sections_detected")
             if sections_detected:
                 st.markdown(f"**Sections detected:** {', '.join(sections_detected)}")
+
+            chart_extractions = doc.get("chart_extractions", [])
+            if chart_extractions:
+                st.markdown(f"**Charts/graphs detected:** {len(chart_extractions)}")
+                for chart in chart_extractions:
+                    title = chart.get("title") or "(untitled chart)"
+                    chart_type = chart.get("chart_type") or "unknown type"
+                    st.caption(f"p.{chart.get('page')} — {chart_type}: {title}")
+                    if chart.get("series"):
+                        st.dataframe(
+                            pd.DataFrame(chart["series"]),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    elif chart.get("summary"):
+                        st.caption(chart["summary"])
 
             basis = doc.get("net_irr_basis")
             if basis and basis.get("basis"):

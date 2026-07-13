@@ -24,6 +24,7 @@ The architecture emphasizes:
 - Evidence provenance (`doc_name`, `page`, `snippet`)
 - Confidence scoring + authority weighting
 - Table extraction from PDFs
+- Chart/graph data extraction from page images (opt-in, vision model)
 - Structured IC memo generation
 - Professional PDF report export
 - Streamlit dashboard for interactive workflows
@@ -173,6 +174,50 @@ Extracted tables are parsed for:
 - capital structures
 - IRR / TVPI tables
 - AUM disclosures
+
+---
+
+# Chart & Visual Data Extraction (opt-in)
+
+Tables and OCR don't cover everything -- a bar/line/pie chart embedded as an
+image (e.g. an AUM growth chart in a fundraising deck) carries no
+extractable text layer at all. A separate, opt-in vision extractor handles
+this case: it rasterizes each page to an image and asks a vision-capable
+model to detect any chart/graph and read off its plotted values (labels,
+axis titles, series data points).
+
+This is disabled by default (it's a heavier extractor -- one model call per
+page) and currently backed by a local Ollama vision model:
+
+```bash
+ollama pull qwen2.5vl:7b
+```
+
+(`llama3.2-vision` is a natural first choice but is currently broken on
+Ollama's new engine, v0.30+ — it dropped support for the `mllama`
+architecture that model uses. `llava` runs but was inaccurate in testing --
+see below. `qwen2.5vl:7b` is chart/document-trained and is what's validated
+here.)
+
+Enable it via config:
+```json
+{"vision": {"enabled": true}}
+```
+
+Results land in `extracted.json` under each document's `chart_extractions`
+list, and are surfaced in the Streamlit "Under the Hood" audit view and in a
+dedicated "Charts & Visual Data Detected" section of the PDF report
+(when any charts were found). Chart-derived values are evidence-tagged but
+capped at a lower confidence than table/text extraction, since they're read
+off pixels rather than cited from text.
+
+**Model choice matters:** in live testing, `llava` reliably *detected*
+charts and returned well-formed JSON, but its actual data-reading accuracy
+was poor -- on a test chart it misread both the title and every plotted
+value. Switching to `qwen2.5vl:7b` (chart/document-trained, 95.7 on DocVQA)
+against the same chart correctly read the exact title and all four values.
+Treat `chart_extractions` output as a lead to verify against the source
+page regardless of model, not a citation-grade fact.
 
 ---
 

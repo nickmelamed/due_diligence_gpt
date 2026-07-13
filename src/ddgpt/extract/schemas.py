@@ -29,6 +29,27 @@ class CarryMetric(BaseModel):
     agreement: float = 1.0
     evidence: Evidence = Field(default_factory=lambda: Evidence(doc_name="", page=None, snippet=""))
 
+class ChartSeriesPoint(BaseModel):
+    label: str
+    value: Optional[float] = None
+
+class ChartExtraction(BaseModel):
+    """A chart/graph (bar, line, pie, ...) detected on a page image by a
+    vision-capable model -- distinct from table extraction (Camelot/
+    pdfplumber, which reads ruled/whitespace tabular structures) and OCR
+    (which reads plain text off a scanned page). Values are read off pixels,
+    not cited from text, so confidence is capped below what a verbatim
+    text-evidence match could earn."""
+    page: int
+    chart_type: Optional[str] = None  # "bar" | "line" | "pie" | "area" | "scatter" | "other"
+    title: Optional[str] = None
+    x_label: Optional[str] = None
+    y_label: Optional[str] = None
+    series: List[ChartSeriesPoint] = Field(default_factory=list)
+    summary: str = ""
+    confidence: float = 0.0
+    evidence: Evidence = Field(default_factory=lambda: Evidence(doc_name="", page=None, snippet=""))
+
 class ExtractedDoc(BaseModel):
     doc_name: str
     doc_date: Optional[str] = None
@@ -48,10 +69,6 @@ class ExtractedDoc(BaseModel):
     net_irr_basis: Optional[DefinitionContext] = None
     sections_detected: List[str] = Field(default_factory=list)
 
-    # Every IRR-shaped percentage mention found anywhere in the document
-    # text (see ddgpt.layout.irr_mentions), not just the ones that made it
-    # into target_irr/net_irr -- lets a rule catch a secondary claim stated
-    # once in prose that conflicts with what got structurally extracted.
     irr_mentions: List[dict] = Field(default_factory=list)
 
     # Populated when two extractors produce materially different values for
@@ -59,8 +76,8 @@ class ExtractedDoc(BaseModel):
     extractor_disagreements: List[dict] = Field(default_factory=list)
 
     # Full reproducibility trail: every candidate value each extractor (and,
-    # if used, the table parser) produced per field -- not just the winner,
-    # and not just the cases where they disagreed. Powers the "under the
-    # hood" audit view; each entry is
-    # {extractor, value, confidence, weight, score, evidence, winner}.
+    # if used, the table parser) produced per field
     extraction_candidates: Dict[str, List[dict]] = Field(default_factory=dict)
+
+    # Charts/graphs detected on page images by the (opt-in) vision extractor.
+    chart_extractions: List[dict] = Field(default_factory=list)

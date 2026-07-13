@@ -8,6 +8,8 @@ from ddgpt.extract.base import Extractor
 from ddgpt.extract.schemas import ExtractedDoc
 from ddgpt.provenance.evidence import Evidence
 
+GAP = r"[\s\S]{0,80}?"
+
 def _find_in_pages(pages: List[Page], pattern: str) -> Tuple[Optional[str], Optional[int], str]:
     rgx = re.compile(pattern, flags=re.IGNORECASE)
     for pg in pages:
@@ -33,9 +35,9 @@ class RegexExtractor(Extractor):
             date, p, snip = _find_in_pages(pages, r"Effective Date:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})")
         out.doc_date = date
 
-        aum_b, p_aum, sn_aum = _find_in_pages(pages, r"AUM\).*?\$([0-9]+\.[0-9]+)B")
+        aum_b, p_aum, sn_aum = _find_in_pages(pages, rf"AUM\){GAP}\$([0-9]+\.[0-9]+)B")
         if aum_b is None:
-            aum_b, p_aum, sn_aum = _find_in_pages(pages, r"Assets Under Management.*?\$([0-9]+\.[0-9]+)B")
+            aum_b, p_aum, sn_aum = _find_in_pages(pages, rf"Assets Under Management{GAP}\$([0-9]+\.[0-9]+)B")
         if aum_b is not None:
             out.aum.value = _parse_billion_to_usd(aum_b)
             out.aum.confidence = 0.55
@@ -43,7 +45,9 @@ class RegexExtractor(Extractor):
         else:
             out.missing_fields.append("aum.value")
 
-        net_irr, p_irr, sn_irr = _find_in_pages(pages, r"Net IRR.*?:\s*([0-9]+\.[0-9]+)%")
+        net_irr, p_irr, sn_irr = _find_in_pages(pages, rf"Net IRR{GAP}:\s*([0-9]+\.[0-9]+)%")
+        if net_irr is None:
+            net_irr, p_irr, sn_irr = _find_in_pages(pages, rf"Net IRR{GAP}([0-9]+\.[0-9]+)%")
         if net_irr is not None:
             out.net_irr.value = float(net_irr)
             out.net_irr.confidence = 0.55
@@ -51,7 +55,9 @@ class RegexExtractor(Extractor):
         else:
             out.missing_fields.append("net_irr.value")
 
-        tvpi, p_tvpi, sn_tvpi = _find_in_pages(pages, r"TVPI.*?:\s*([0-9]+\.[0-9]+)x")
+        tvpi, p_tvpi, sn_tvpi = _find_in_pages(pages, rf"TVPI{GAP}:\s*([0-9]+\.[0-9]+)x")
+        if tvpi is None:
+            tvpi, p_tvpi, sn_tvpi = _find_in_pages(pages, rf"TVPI{GAP}([0-9]+\.[0-9]+)x")
         if tvpi is not None:
             out.tvpi.value = float(tvpi)
             out.tvpi.confidence = 0.55
@@ -59,7 +65,9 @@ class RegexExtractor(Extractor):
         else:
             out.missing_fields.append("tvpi.value")
 
-        target, p_t, sn_t = _find_in_pages(pages, r"Target IRR:\s*([0-9]+)%")
+        target, p_t, sn_t = _find_in_pages(pages, rf"Target IRR{GAP}:\s*([0-9]+)%")
+        if target is None:
+            target, p_t, sn_t = _find_in_pages(pages, rf"Target IRR{GAP}([0-9]+)%")
         if target is not None:
             out.target_irr.value = float(target)
             out.target_irr.confidence = 0.55
@@ -67,9 +75,9 @@ class RegexExtractor(Extractor):
         else:
             out.missing_fields.append("target_irr.value")
 
-        fee, p_f, sn_f = _find_in_pages(pages, r"Management Fee.*?:\s*([0-9]+\.[0-9]+)%")
+        fee, p_f, sn_f = _find_in_pages(pages, rf"Management Fee{GAP}:\s*([0-9]+\.[0-9]+)%")
         if fee is None:
-            fee, p_f, sn_f = _find_in_pages(pages, r"Management Fee.*?([0-9]+\.[0-9]+)%")
+            fee, p_f, sn_f = _find_in_pages(pages, rf"Management Fee{GAP}([0-9]+\.[0-9]+)%")
         if fee is not None:
             out.mgmt_fee.value = float(fee)
             out.mgmt_fee.confidence = 0.55
@@ -79,10 +87,10 @@ class RegexExtractor(Extractor):
 
         carry, p_c, sn_c = _find_in_pages(pages, r"Carry:\s*([0-9]+)%")
         if carry is None:
-            carry, p_c, sn_c = _find_in_pages(pages, r"carried interest.*?([0-9]+)%")
+            carry, p_c, sn_c = _find_in_pages(pages, rf"carried interest{GAP}([0-9]+)%")
         hurdle, p_h, sn_h = _find_in_pages(pages, r"over an\s*([0-9]+)%\s*preferred")
         if hurdle is None:
-            hurdle, p_h, sn_h = _find_in_pages(pages, r"hurdle.*?([0-9]+)%")
+            hurdle, p_h, sn_h = _find_in_pages(pages, rf"hurdle{GAP}([0-9]+)%")
 
         if carry is not None:
             out.carry.value = float(carry)

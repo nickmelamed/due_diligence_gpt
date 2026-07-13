@@ -4,9 +4,7 @@ from typing import List
 from ddgpt.io.loaders import Page
 from ddgpt.extract.schemas import ExtractedDoc
 
-# Shared between every LLM-backed extractor (Cohere, Ollama, ...): the
-# structured-extraction schema hint, chunking for long documents, sanitizing
-# a model's raw JSON, and merging per-chunk results back into one doc.
+# Shared between every LLM-backed extractor (Cohere, Ollama, ...)
 
 METRIC_FIELDS = ["aum", "net_irr", "tvpi", "target_irr", "mgmt_fee", "carry"]
 
@@ -109,7 +107,35 @@ def sanitize_extraction(data: dict) -> dict:
         "snippet": ""
     })
 
+    _normalize_percent_like(data, "net_irr", "value")
+    _normalize_percent_like(data, "target_irr", "value")
+    _normalize_percent_like(data, "mgmt_fee", "value")
+    _normalize_percent_like(data, "carry", "value")
+    _normalize_percent_like(data, "carry", "hurdle")
+
     return data
+
+
+def _normalize_percent_like(data: dict, field: str, subfield: str) -> None:
+    """Despite the prompt's explicit "16.83 for 16.83%" convention, smaller/
+    weaker LLMs occasionally return the fraction form instead (0.02 for a 2%
+    management fee) while reporting full confidence -- observed in practice
+    with a local model. Institutional fee/IRR/carry/hurdle rates are
+    essentially never below 1 in the percent-number convention this schema
+    uses, so a value in (0, 1) is corrected to its x100 equivalent and
+    flagged in notes for auditability rather than silently altered."""
+    obj = data.get(field)
+    if not isinstance(obj, dict):
+        return
+
+    value = obj.get(subfield)
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value < 1:
+        corrected = value * 100
+        obj[subfield] = corrected
+        data.setdefault("notes", []).append(
+            f"{field}.{subfield}: model returned {value} (looked like a fraction, not a "
+            f"percent) -- auto-corrected to {corrected} per this schema's percent-number convention."
+        )
 
 
 def merge_chunk_docs(doc_name: str, chunk_docs: List[ExtractedDoc], source_label: str) -> ExtractedDoc:

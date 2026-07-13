@@ -57,3 +57,32 @@ def test_merge_chunk_docs_reports_missing_fields_when_all_chunks_null():
 
     assert "aum.value" in merged.missing_fields
     assert "carry.hurdle" in merged.missing_fields
+
+
+def test_sanitize_extraction_corrects_fraction_returned_for_mgmt_fee():
+    # A 2% management fee returned as a fraction (0.02) instead of this
+    # schema's percent-number convention (2.0) -- observed in practice from
+    # a local model despite the prompt's explicit instruction.
+    data = {"mgmt_fee": {"value": 0.02, "confidence": 1.0}}
+    sanitized = sanitize_extraction(data)
+
+    assert sanitized["mgmt_fee"]["value"] == 2.0
+    assert any("auto-corrected" in n for n in sanitized["notes"])
+
+
+def test_sanitize_extraction_leaves_normal_percent_values_untouched():
+    data = {"mgmt_fee": {"value": 2.0, "confidence": 1.0}, "net_irr": {"value": 16.83}}
+    sanitized = sanitize_extraction(data)
+
+    assert sanitized["mgmt_fee"]["value"] == 2.0
+    assert sanitized["net_irr"]["value"] == 16.83
+    assert sanitized["notes"] == []
+
+
+def test_sanitize_extraction_leaves_null_and_zero_values_untouched():
+    data = {"mgmt_fee": {"value": None}, "carry": {"value": 0, "hurdle": None}}
+    sanitized = sanitize_extraction(data)
+
+    assert sanitized["mgmt_fee"]["value"] is None
+    assert sanitized["carry"]["value"] == 0
+    assert sanitized["notes"] == []

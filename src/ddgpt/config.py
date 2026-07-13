@@ -18,6 +18,30 @@ class OllamaConfig(BaseModel):
     temperature: float = 0.0
     host: str = "http://localhost:11434"
 
+class VisionConfig(BaseModel):
+    # Chart/graph extraction from page images -- a genuinely different,
+    # heavier extractor than the text-based ones (renders every page to an
+    # image and runs a vision-capable model on it), so it's opt-in rather
+    # than on-by-default like OllamaExtractor.
+    enabled: bool = False
+    provider: str = "ollama"  # only "ollama" implemented today
+    # NOT llama3.2-vision: broken on Ollama >=0.30's new engine (dropped
+    # 'mllama' architecture support) -- confirmed via live testing, every
+    # call 500s. NOT llava either: it runs, but hallucinated both the title
+    # and every value on a real test chart. qwen2.5vl:7b is chart/document
+    # trained and read the same chart correctly (see vision_extractor.py).
+    model: str = "qwen2.5vl:7b"
+    host: str = "http://localhost:11434"
+    temperature: float = 0.0
+    # Confirmed accurate at dpi=150 against a real chart (see
+    # vision_extractor.py) -- kept as the default for latency/payload size,
+    # though qwen2.5vl (unlike llava) has no known failure mode at higher dpi.
+    dpi: int = 150
+    # Safety cap: a 150-page LPA shouldn't silently trigger 150 vision calls
+    # the first time someone flips this flag on.
+    max_pages: int = 20
+    prompt: str = "chart_extract_v1.txt"
+
 class RuleConfig(BaseModel):
     aum_tolerance_pct: float = 0.03
     mgmt_fee_abs_pct: float = 0.25
@@ -88,6 +112,8 @@ class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig)
 
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
+
+    vision: VisionConfig = Field(default_factory=VisionConfig)
 
     rules: RuleConfig = Field(default_factory=RuleConfig)
 

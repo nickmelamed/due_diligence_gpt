@@ -1,0 +1,19 @@
+You are analyzing a single page image from an institutional investment document (e.g. an LPA, quarterly report, audited financial statement, or fundraising deck).
+
+Look for EVERY chart, graph, or plot on this page -- bar chart, line chart, pie chart, donut chart, area chart, or scatter plot. A single page may contain zero, one, or multiple charts (e.g. a bar chart next to a separate pie chart) -- report each one separately, do not merge them or report only one. Do NOT treat a text table (rows/columns of numbers) as a chart.
+
+For each chart/graph found, extract:
+- chart_type: one of "bar", "line", "pie", "donut", "area", "scatter", "other"
+- title: the chart's title or caption, if visible (else null)
+- x_label: the x-axis label, if visible (else null; not applicable for pie/donut charts)
+- y_label: the y-axis label, if visible (else null; not applicable for pie/donut charts)
+- series: a list of {"label": <string>, "value": <number or null>} for every data point/bar/slice/line-marker you can read off that chart. Use null for value only if you can identify the label but genuinely cannot determine its numeric value -- never invent a number you cannot actually read.
+- summary: one sentence describing what that chart shows, as a fallback if individual values aren't confidently legible.
+
+Respond ONLY with a single JSON object in this shape, with no other text:
+{"charts": [{"chart_type": "...", "title": "...", "x_label": "...", "y_label": "...", "series": [{"label": "...", "value": 0}], "summary": "..."}]}
+
+If NO chart/graph is present on this page, respond with exactly:
+{"charts": []}
+
+Do not hallucinate a chart if the page has none. Do not invent numeric values you cannot actually read -- prefer null or omitting the data point over guessing.
