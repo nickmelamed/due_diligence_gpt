@@ -1,7 +1,6 @@
 import streamlit as st
 import os
 import tempfile
-import warnings
 from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
@@ -9,7 +8,8 @@ import pandas as pd
 from ddgpt.pipeline.builders import (
     build_extractors,
     build_rules,
-    build_pipeline
+    build_pipeline,
+    extractor_availability
 )
 
 from ddgpt.config import Config
@@ -27,10 +27,9 @@ from ddgpt.report.tables import (
 
 load_dotenv()
 
-warnings.filterwarnings(
-    "ignore",
-    message="CropBox missing from /Page"
-)
+# Note: the "CropBox missing from /Page, defaulting to MediaBox" pdfminer
+# notice is suppressed in ddgpt.io.loaders (it logs via `logging`, not
+# `warnings.warn`, so a warnings filter here never actually caught it).
 
 # Cohere client + extractor/rule/pipeline construction is expensive and
 # stateless across uploads -- build it once per server process instead of
@@ -170,6 +169,28 @@ def files_hash(files):
         (f.name, f.size)
         for f in files
     )
+
+AUDIT_FIELD_LABELS = {
+    "aum": "AUM",
+    "net_irr": "Net IRR",
+    "tvpi": "TVPI",
+    "target_irr": "Target IRR",
+    "mgmt_fee": "Management Fee",
+    "carry": "Carry",
+}
+
+def candidates_dataframe(candidates):
+    rows = []
+    for c in candidates:
+        rows.append({
+            "Extractor": c["extractor"],
+            "Value": c["value"],
+            "Confidence": c["confidence"],
+            "Trust Weight": c["weight"],
+            "Score": c["score"],
+            "Selected": "✓" if c["winner"] else "",
+        })
+    return pd.DataFrame(rows)
 
 # Pipeline
 
@@ -373,6 +394,83 @@ if st.session_state.result:
         facts_df[display_cols],
         use_container_width=True
     )
+
+    st.divider()
+
+    # Under the Hood -- Extraction Audit Trail
+    #
+    # Reproducibility view: every extractor's raw candidate value per field
+    # (not just the winner, not just disagreements), which one was selected
+    # and why (the trust-weight math), and any cross-extractor contradiction
+    # -- so the confidence score isn't a black box.
+
+    st.subheader("Under the Hood — Extraction Audit Trail")
+    st.caption(
+        "Every extractor's raw output per field, which one was selected and why, "
+        "and any cross-extractor disagreement."
+    )
+
+    availability = extractor_availability(cfg)
+    status_line = " · ".join(f"{name}: {status}" for name, status in availability.items())
+    skipped = {name: status for name, status in availability.items() if status.startswith("skipped")}
+
+    st.caption(f"Extractor status — {status_line}")
+    if skipped:
+        st.info(
+            "Some configured extractors were skipped for this run and did not "
+            "contribute any candidates below: "
+            + "; ".join(f"{name} ({status})" for name, status in skipped.items())
+        )
+
+    for doc in result["extracted"]:
+        with st.expander(doc["doc_name"]):
+
+            disagreement_fields = {
+                d["field"] for d in doc.get("extractor_disagreements", [])
+            }
+
+            any_candidates = False
+
+            for field_key, label in AUDIT_FIELD_LABELS.items():
+                candidates = doc.get("extraction_candidates", {}).get(field_key, [])
+                if not candidates:
+                    continue
+
+                any_candidates = True
+                st.markdown(f"**{label}**")
+
+                if field_key in disagreement_fields:
+                    st.warning(
+                        f"Extractors disagreed on {label} — the selected value "
+                        f"may be wrong. Verify manually."
+                    )
+
+                st.dataframe(
+                    candidates_dataframe(candidates),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+            if not any_candidates:
+                st.caption("No extraction candidates recorded for this document.")
+
+            sections_detected = doc.get("sections_detected")
+            if sections_detected:
+                st.markdown(f"**Sections detected:** {', '.join(sections_detected)}")
+
+            basis = doc.get("net_irr_basis")
+            if basis and basis.get("basis"):
+                st.markdown(
+                    f"**IRR convention:** {basis['basis']} "
+                    f"(p.{basis.get('page')}, {basis.get('section') or 'n/a'} — "
+                    f"\"{basis.get('snippet')}\")"
+                )
+
+            notes = doc.get("notes")
+            if notes:
+                st.markdown("**Notes:**")
+                for note in notes:
+                    st.caption(f"- {note}")
 
     st.divider()
 

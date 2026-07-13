@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict
 from ddgpt.provenance.evidence import Evidence
 
 class DefinitionContext(BaseModel):
@@ -48,6 +48,19 @@ class ExtractedDoc(BaseModel):
     net_irr_basis: Optional[DefinitionContext] = None
     sections_detected: List[str] = Field(default_factory=list)
 
+    # Every IRR-shaped percentage mention found anywhere in the document
+    # text (see ddgpt.layout.irr_mentions), not just the ones that made it
+    # into target_irr/net_irr -- lets a rule catch a secondary claim stated
+    # once in prose that conflicts with what got structurally extracted.
+    irr_mentions: List[dict] = Field(default_factory=list)
+
     # Populated when two extractors produce materially different values for
     # the same field; distinct from cross-document NumericMismatchRule flags.
     extractor_disagreements: List[dict] = Field(default_factory=list)
+
+    # Full reproducibility trail: every candidate value each extractor (and,
+    # if used, the table parser) produced per field -- not just the winner,
+    # and not just the cases where they disagreed. Powers the "under the
+    # hood" audit view; each entry is
+    # {extractor, value, confidence, weight, score, evidence, winner}.
+    extraction_candidates: Dict[str, List[dict]] = Field(default_factory=dict)

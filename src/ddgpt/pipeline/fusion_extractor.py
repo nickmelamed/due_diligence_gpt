@@ -4,6 +4,7 @@ from ddgpt.extract.tables.financial_table_parser import FinancialTableParser
 from ddgpt.pipeline.scoring import compute_agreement
 from ddgpt.provenance.evidence import Evidence
 from ddgpt.layout.definitions import infer_irr_basis
+from ddgpt.layout.irr_mentions import find_irr_mentions
 from ddgpt.extract.schemas import DefinitionContext
 from ddgpt.utils.redaction import redact_pages
 from ddgpt.utils.cache import disk_cached, content_hash
@@ -75,6 +76,8 @@ class FusionExtractor:
                 snippet=entry["snippet"],
             )
 
+            self._record_table_candidate(base, metric_name, entry)
+
             if entry["footnotes"]:
                 base.notes.append(
                     f"{metric_name}: sourced from table {entry['table_id']} "
@@ -82,6 +85,7 @@ class FusionExtractor:
                 )
 
         base.net_irr_basis = self._build_definition_context(pages, layout)
+        base.irr_mentions = find_irr_mentions(pages)
 
         if layout is not None:
             base.sections_detected = layout.canonical_types_found()
@@ -123,6 +127,7 @@ class FusionExtractor:
         values = [getattr(doc, metric_name).value for _, doc in docs]
         agreement = compute_agreement(values)
 
+        candidates = []
         best_score = -1
         best_metric = None
         best_extractor = None
@@ -137,10 +142,27 @@ class FusionExtractor:
 
             score = metric.confidence * weight
 
+            candidates.append({
+                "extractor": extractor_name,
+                "value": metric.value,
+                "confidence": metric.confidence,
+                "weight": weight,
+                "score": score,
+                "evidence": {
+                    "page": metric.evidence.page,
+                    "snippet": metric.evidence.snippet,
+                },
+                "winner": False,
+            })
+
             if score > best_score:
                 best_score = score
                 best_metric = metric
                 best_extractor = extractor_name
+
+        for candidate in candidates:
+            if candidate["extractor"] == best_extractor:
+                candidate["winner"] = True
 
         if best_metric is not None:
             best_metric.agreement = agreement
@@ -158,19 +180,45 @@ class FusionExtractor:
                 "agreement": agreement,
             }
 
-        return best_metric, disagreement
+        return best_metric, disagreement, candidates
 
     def _reconcile(self, docs):
         base = docs[0][1]
 
         disagreements = []
+        candidates_by_field = {}
 
         for metric_name in ("aum", "net_irr", "tvpi", "target_irr", "mgmt_fee", "carry"):
-            metric, disagreement = self._pick_best_metric(metric_name, docs)
+            metric, disagreement, candidates = self._pick_best_metric(metric_name, docs)
             setattr(base, metric_name, metric)
+            candidates_by_field[metric_name] = candidates
             if disagreement:
                 disagreements.append(disagreement)
 
         base.extractor_disagreements = disagreements
+        base.extraction_candidates = candidates_by_field
 
         return base
+
+    def _record_table_candidate(self, base, metric_name, entry):
+        """Table-sourced fallback is a distinct source from the extractor
+        ensemble; recorded as its own candidate, and any existing pseudo
+        winner (an extractor that "won" a field no extractor actually found
+        a value for) is demoted so exactly one candidate is ever marked the
+        winner."""
+        existing = base.extraction_candidates.setdefault(metric_name, [])
+        for candidate in existing:
+            candidate["winner"] = False
+
+        existing.append({
+            "extractor": "TableParser",
+            "value": entry["value"],
+            "confidence": 0.85,
+            "weight": None,
+            "score": None,
+            "evidence": {
+                "page": entry["page"],
+                "snippet": entry["snippet"],
+            },
+            "winner": True,
+        })

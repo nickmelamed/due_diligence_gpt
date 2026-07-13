@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
 import fitz
@@ -9,6 +10,10 @@ from ddgpt.ingestion.ocr import ocr_page_image
 from ddgpt.layout.models import DocumentLayout
 from ddgpt.layout.section_parser import parse_sections, parse_sections_from_text
 from ddgpt.layout.footnote_linker import attach_footnotes_to_tables
+
+# pdfminer (used internally by pdfplumber/Camelot for table extraction) logs
+# a routine, harmless notice at WARNING level whenever a PDF page omits an
+logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 # A page whose native text layer is shorter than this is treated as a
 # scanned/image page and re-read via OCR instead of silently kept as

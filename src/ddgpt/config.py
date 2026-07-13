@@ -11,7 +11,7 @@ class ModelConfig(BaseModel):
 class OllamaConfig(BaseModel):
     # Second, independent LLM extractor backed by a local open-weight model.
     # `enabled` only takes effect if an Ollama server is actually reachable
-    # at pipeline build time -- otherwise this extractor silently skips
+    # at pipeline build time; otherwise this extractor silently skips
     # itself, the same way CohereExtractor does when CO_API_KEY is unset.
     enabled: bool = True
     model: str = "llama3.2:3b"
@@ -22,6 +22,13 @@ class RuleConfig(BaseModel):
     aum_tolerance_pct: float = 0.03
     mgmt_fee_abs_pct: float = 0.25
     target_irr_abs_pct: float = 2.0
+
+    # Deliberately tighter than target_irr_abs_pct: that tolerance is for
+    # *cross-document* comparison, where some drift is expected (different
+    # as-of dates, marketing vs underwriting). This is for a *single*
+    # document contradicting itself, where even a couple points of
+    # difference paired with a different gross/net label is suspicious.
+    internal_irr_mention_tolerance_pct: float = 1.0
 
 class OCRConfig(BaseModel):
     enabled: bool = True

@@ -9,7 +9,7 @@ from typing import List
 from ddgpt.config import Config
 from ddgpt.utils.logging import setup_logger
 from ddgpt.utils.cache import disk_cached, content_hash
-from ddgpt.pipeline.builders import build_extractors, build_rules, build_pipeline
+from ddgpt.pipeline.builders import build_extractors, build_rules, build_pipeline, extractor_availability
 from ddgpt.risk.engine import RiskEngine
 from ddgpt.copilot.ic_copilot import ICCopilot
 from ddgpt.copilot.recommendation_engine import determine_recommendation
@@ -69,6 +69,9 @@ def run(
     extractors = build_extractors(cfg)
     rules = build_rules(cfg)
     pipeline = build_pipeline(cfg, extractors, rules)
+
+    for name, status in extractor_availability(cfg).items():
+        logger.info(f"extractor {name}: {status}")
 
     paths = discover_files(input)
     docs = _load_docs(cfg, paths)
