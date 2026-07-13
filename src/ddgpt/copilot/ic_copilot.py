@@ -1,8 +1,12 @@
 import os
 import json
+import logging
+import time
 import cohere
 
 from ddgpt.report.ic_memo import generate_ic_summary
+
+logger = logging.getLogger("ddgpt")
 
 
 class ICCopilot:
@@ -11,13 +15,12 @@ class ICCopilot:
 
         api_key = os.getenv("CO_API_KEY")
 
-        # No hard failure when a key isn't configured: fall back to the
-        # deterministic, template-based memo (report.ic_memo) rather than
-        # taking down the whole pipeline over a missing LLM credential.
+        # No hard failure when a key isn't configured
         self.client = cohere.Client(api_key) if api_key else None
 
     def generate(self, extracted, flags, recommendation=None):
         if self.client is None:
+            logger.info("llm_call provider=cohere stage=memo_generation status=skipped reason=no_api_key fallback=template")
             return generate_ic_summary(extracted, flags, recommendation=recommendation)
 
         recommendation_instruction = ""
@@ -58,10 +61,25 @@ Return professional markdown suitable
 for an institutional IC memo.
 """
 
-        resp = self.client.chat(
-            model=self.model,
-            message=prompt,
-            temperature=0.2
+        call_start = time.perf_counter()
+        try:
+            resp = self.client.chat(
+                model=self.model,
+                message=prompt,
+                temperature=0.2
+            )
+        except Exception as e:
+            latency = time.perf_counter() - call_start
+            logger.error(
+                f"llm_call provider=cohere model={self.model} stage=memo_generation "
+                f"status=error latency_s={latency:.3f} error={e!r} fallback=template"
+            )
+            return generate_ic_summary(extracted, flags, recommendation=recommendation)
+
+        latency = time.perf_counter() - call_start
+        logger.info(
+            f"llm_call provider=cohere model={self.model} stage=memo_generation "
+            f"status=ok latency_s={latency:.3f}"
         )
 
         return resp.text

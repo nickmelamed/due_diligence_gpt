@@ -31,8 +31,76 @@ from datetime import datetime
 
 import pandas as pd
 import re
+import html
 
-import re
+METRIC_FIELDS = ("aum", "net_irr", "tvpi", "target_irr", "mgmt_fee", "carry")
+
+
+def compute_data_quality(extracted) -> list[dict]:
+    """Per-document extraction quality summary: how many of the six core
+    metrics were found, their average confidence, and how evidence
+    verification classified each (verbatim / fuzzy / not found) -- derived
+    from the same `notes` that postprocess.verify_metric already writes."""
+    rows = []
+    for d in extracted:
+        present = []
+        for key in METRIC_FIELDS:
+            metric = d.get(key, {})
+            if metric.get("value") is not None:
+                present.append(metric.get("confidence", 0.0))
+
+        notes = d.get("notes", [])
+        fuzzy = sum(1 for n in notes if "matched page fuzzily" in n)
+        not_found = sum(1 for n in notes if "not found verbatim" in n)
+
+        rows.append({
+            "doc_name": d.get("doc_name", ""),
+            "fields_found": len(present),
+            "fields_total": len(METRIC_FIELDS),
+            "avg_confidence": (sum(present) / len(present)) if present else None,
+            "fuzzy_matches": fuzzy,
+            "not_found": not_found,
+            "missing_fields": len(d.get("missing_fields", [])),
+        })
+    return rows
+
+
+def _confidence_tier(value):
+    if value is None:
+        return "N/A"
+    if value >= 0.75:
+        return "High"
+    if value >= 0.5:
+        return "Medium"
+    return "Low"
+
+
+CONFIDENCE_COLORS = {
+    "High": colors.HexColor("#34d399"),
+    "Medium": colors.HexColor("#fbbf24"),
+    "Low": colors.HexColor("#ef4444"),
+    "N/A": colors.HexColor("#9ca3af"),
+}
+
+
+def strip_code_fences(text: str) -> str:
+    """Remove fenced-code markers only, preserving markdown headers/bold/
+    lists so the PDF renderer can format them properly instead of receiving
+    already-flattened plain text."""
+    text = re.sub(r"```(?:markdown)?", "", text)
+    text = text.replace("```", "")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def format_inline(text: str) -> str:
+    """Escape raw text for reportlab's mini-XML Paragraph markup, then
+    reintroduce **bold**/*italic* as <b>/<i> tags."""
+    text = html.escape(text, quote=False)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<i>\1</i>", text)
+    return text
+
 
 def clean_memo_text(text: str) -> str:
 
@@ -191,6 +259,18 @@ def build_styles():
 
     styles.add(
         ParagraphStyle(
+            name="SubHeading",
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            leading=17,
+            textColor=colors.HexColor("#374151"),
+            spaceBefore=10,
+            spaceAfter=6
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
             name="Body",
             fontName="Helvetica",
             fontSize=11,
@@ -213,6 +293,16 @@ def build_styles():
 
     styles.add(
         ParagraphStyle(
+            name="TableCell",
+            fontName="Helvetica",
+            fontSize=9,
+            leading=12,
+            textColor=colors.HexColor("#1f2937")
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
             name="Small",
             fontName="Helvetica",
             fontSize=10,
@@ -224,26 +314,19 @@ def build_styles():
     return styles
 
 
-# Clean Text
-
-def clean_text(text: str):
-
-    text = text.replace("**", "")
-    text = text.replace("#", "")
-
-    return text.strip()
-
-
 # Cover Page
 
 def build_cover_page(
     story,
     styles,
-    risk_score
+    risk_score,
+    facts_df=None,
+    data_quality=None,
+    recommendation=None
 ):
 
     story.append(
-        Spacer(1, 2 * inch)
+        Spacer(1, 1.6 * inch)
     )
 
     story.append(
@@ -261,7 +344,7 @@ def build_cover_page(
     )
 
     story.append(
-        Spacer(1, 0.5 * inch)
+        Spacer(1, 0.4 * inch)
     )
 
     story.append(
@@ -284,8 +367,49 @@ def build_cover_page(
         )
     )
 
+    if recommendation:
+        story.append(
+            Paragraph(
+                f"""
+                <b>Recommendation:</b>
+                {recommendation.get("decision", "N/A")}
+                (confidence {recommendation.get("confidence", 0.0):.0%})
+                """,
+                styles["Body"]
+            )
+        )
+
+    if facts_df is not None and len(facts_df):
+        doc_names = ", ".join(str(n) for n in facts_df["doc_name"].tolist())
+        story.append(
+            Paragraph(
+                f"""
+                <b>Documents analyzed ({len(facts_df)}):</b>
+                {doc_names}
+                """,
+                styles["Body"]
+            )
+        )
+
+    if data_quality:
+        found = sum(r["fields_found"] for r in data_quality)
+        total = sum(r["fields_total"] for r in data_quality)
+        confidences = [r["avg_confidence"] for r in data_quality if r["avg_confidence"] is not None]
+        avg_conf = sum(confidences) / len(confidences) if confidences else None
+        conf_text = f"{avg_conf:.0%}" if avg_conf is not None else "N/A"
+
+        story.append(
+            Paragraph(
+                f"""
+                <b>Data completeness:</b>
+                {found}/{total} core fields extracted, average confidence {conf_text}
+                """,
+                styles["Body"]
+            )
+        )
+
     story.append(
-        Spacer(1, 0.5 * inch)
+        Spacer(1, 0.4 * inch)
     )
 
     story.append(
@@ -403,97 +527,126 @@ def build_evidence_table(
         "Target IRR",
         "TVPI",
         "Mgmt Fee",
-        "Carry"
+        "Carry",
+        "Confidence"
     ]]
+
+    conf_cols = [c for c in ("aum_conf", "net_irr_conf", "mgmt_fee_conf", "carry_conf") if c in facts_df.columns]
+    tier_by_row = []
 
     for _, row in facts_df.iterrows():
 
+        confs = [row[c] for c in conf_cols if pd.notna(row[c])]
+        avg_conf = (sum(confs) / len(confs)) if confs else None
+        tier = _confidence_tier(avg_conf)
+        tier_by_row.append(tier)
+
         table_data.append([
-            str(row["doc_name"]),
+            Paragraph(html.escape(str(row["doc_name"]), quote=False), styles["TableCell"]),
             str(row["net_irr_pct"]),
             str(row["target_irr_pct"]),
             str(row["tvpi"]),
             str(row["mgmt_fee_pct"]),
-            str(row["carry_pct"])
+            str(row["carry_pct"]),
+            tier if avg_conf is None else f"{tier} ({avg_conf:.0%})"
         ])
 
     table = Table(
         table_data,
         colWidths=[
-            2.6 * inch,
-            0.9 * inch,
-            1.0 * inch,
+            2.1 * inch,
             0.8 * inch,
             0.9 * inch,
-            0.8 * inch
+            0.7 * inch,
+            0.8 * inch,
+            0.7 * inch,
+            1.1 * inch
         ]
     )
 
-    table.setStyle(
-        TableStyle([
+    style_commands = [
 
-            (
-                "BACKGROUND",
-                (0, 0),
-                (-1, 0),
-                colors.HexColor("#111827")
-            ),
+        (
+            "BACKGROUND",
+            (0, 0),
+            (-1, 0),
+            colors.HexColor("#111827")
+        ),
 
-            (
-                "TEXTCOLOR",
-                (0, 0),
-                (-1, 0),
-                colors.white
-            ),
+        (
+            "TEXTCOLOR",
+            (0, 0),
+            (-1, 0),
+            colors.white
+        ),
 
-            (
-                "FONTNAME",
-                (0, 0),
-                (-1, 0),
-                "Helvetica-Bold"
-            ),
+        (
+            "FONTNAME",
+            (0, 0),
+            (-1, 0),
+            "Helvetica-Bold"
+        ),
 
-            (
-                "GRID",
-                (0, 0),
-                (-1, -1),
-                0.5,
-                colors.HexColor("#d1d5db")
-            ),
+        (
+            "GRID",
+            (0, 0),
+            (-1, -1),
+            0.5,
+            colors.HexColor("#d1d5db")
+        ),
 
-            (
-                "ROWBACKGROUNDS",
-                (0, 1),
-                (-1, -1),
-                [
-                    colors.white,
-                    colors.HexColor("#f3f4f6")
-                ]
-            ),
+        (
+            "ROWBACKGROUNDS",
+            (0, 1),
+            (-1, -1),
+            [
+                colors.white,
+                colors.HexColor("#f3f4f6")
+            ]
+        ),
 
-            (
-                "BOTTOMPADDING",
-                (0, 0),
-                (-1, 0),
-                10
-            ),
+        (
+            "BOTTOMPADDING",
+            (0, 0),
+            (-1, 0),
+            10
+        ),
 
-            (
-                "TOPPADDING",
-                (0, 0),
-                (-1, -1),
-                8
-            ),
+        (
+            "TOPPADDING",
+            (0, 0),
+            (-1, -1),
+            8
+        ),
 
-            (
-                "BOTTOMPADDING",
-                (0, 1),
-                (-1, -1),
-                8
-            )
+        (
+            "BOTTOMPADDING",
+            (0, 1),
+            (-1, -1),
+            8
+        ),
 
-        ])
-    )
+        (
+            "VALIGN",
+            (0, 0),
+            (-1, -1),
+            "TOP"
+        )
+
+    ]
+
+    # Confidence column (last column) gets its tier color as text, so a
+    # reviewer can see data quality at a glance without opening the
+    # Streamlit "Under the Hood" audit view.
+    for row_idx, tier in enumerate(tier_by_row, start=1):
+        style_commands.append(
+            ("TEXTCOLOR", (-1, row_idx), (-1, row_idx), CONFIDENCE_COLORS[tier])
+        )
+        style_commands.append(
+            ("FONTNAME", (-1, row_idx), (-1, row_idx), "Helvetica-Bold")
+        )
+
+    table.setStyle(TableStyle(style_commands))
 
     story.append(table)
 
@@ -502,7 +655,80 @@ def build_evidence_table(
     )
 
 
+# Data Quality Section
+
+def build_data_quality_section(
+    story,
+    styles,
+    data_quality
+):
+    if not data_quality:
+        return
+
+    story.append(
+        Paragraph(
+            "Data Quality & Evidence Verification",
+            styles["SectionTitle"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "How each metric's citation was checked against the source document: "
+            "a verbatim match, a fuzzy match (OCR noise/hyphenation), or no match found.",
+            styles["Small"]
+        )
+    )
+
+    story.append(Spacer(1, 8))
+
+    table_data = [[
+        "Document",
+        "Fields Found",
+        "Avg Confidence",
+        "Fuzzy Matches",
+        "Not Found"
+    ]]
+
+    for row in data_quality:
+        avg_conf = row["avg_confidence"]
+        table_data.append([
+            Paragraph(html.escape(str(row["doc_name"]), quote=False), styles["TableCell"]),
+            f'{row["fields_found"]}/{row["fields_total"]}',
+            "N/A" if avg_conf is None else f"{avg_conf:.0%}",
+            str(row["fuzzy_matches"]),
+            str(row["not_found"]),
+        ])
+
+    table = Table(
+        table_data,
+        colWidths=[2.6 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
+    )
+
+    table.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f3f4f6")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ])
+    )
+
+    story.append(table)
+    story.append(Spacer(1, 24))
+
+
 # Memo Body
+
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+BULLET_RE = re.compile(r"^[-*]\s+(.*)$")
+NUMBERED_RE = re.compile(r"^\d+\.\s+(.*)$")
+HR_RE = re.compile(r"^-{3,}$")
+
 
 def build_memo_body(
     story,
@@ -517,6 +743,7 @@ def build_memo_body(
         )
     )
 
+    memo = strip_code_fences(memo)
     lines = memo.split("\n")
 
     for line in lines:
@@ -524,52 +751,37 @@ def build_memo_body(
         line = line.strip()
 
         if not line:
-
-            story.append(
-                Spacer(1, 8)
-            )
-
+            story.append(Spacer(1, 8))
             continue
 
-        clean = clean_text(line)
-
-        if clean.lower().startswith(
-            (
-                "top",
-                "inconsistencies",
-                "recommendation",
-                "questions"
-            )
-        ):
-
-            story.append(
-                Paragraph(
-                    clean,
-                    styles["SectionTitle"]
-                )
-            )
-
+        if HR_RE.match(line):
+            story.append(Spacer(1, 6))
             continue
 
-        if line.startswith("-") or re.match(
-            r"^\d+\.",
-            line
-        ):
+        heading_match = HEADING_RE.match(line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            text = format_inline(heading_match.group(2).strip())
+            style = styles["SectionTitle"] if level <= 2 else styles["SubHeading"]
+            story.append(Paragraph(text, style))
+            continue
 
+        bullet_match = BULLET_RE.match(line)
+        if bullet_match:
             story.append(
-                Paragraph(
-                    clean,
-                    styles["CustomBullet"]
-                )
+                Paragraph(f"• {format_inline(bullet_match.group(1))}", styles["CustomBullet"])
             )
+            continue
 
+        numbered_match = NUMBERED_RE.match(line)
+        if numbered_match:
+            story.append(
+                Paragraph(format_inline(line), styles["CustomBullet"])
+            )
             continue
 
         story.append(
-            Paragraph(
-                clean,
-                styles["Body"]
-            )
+            Paragraph(format_inline(line), styles["Body"])
         )
 
 
@@ -580,9 +792,11 @@ def render_ic_pdf(
     memo: str,
     flags,
     facts_df,
-    risk_score
+    risk_score,
+    extracted=None,
+    recommendation=None
 ):
-    memo = clean_memo_text(memo)
+    data_quality = compute_data_quality(extracted) if extracted else None
 
     styles = build_styles()
 
@@ -600,7 +814,10 @@ def render_ic_pdf(
     build_cover_page(
         story,
         styles,
-        risk_score
+        risk_score,
+        facts_df=facts_df,
+        data_quality=data_quality,
+        recommendation=recommendation
     )
 
     build_flags_section(
@@ -613,6 +830,12 @@ def render_ic_pdf(
         story,
         styles,
         facts_df
+    )
+
+    build_data_quality_section(
+        story,
+        styles,
+        data_quality
     )
 
     build_memo_body(

@@ -27,6 +27,20 @@ def generate_ic_summary(
     yellow = sum(1 for f in flags if f["severity"] == "YELLOW")
     lines.append(f"- Flags detected: **{red} RED**, **{yellow} YELLOW**")
 
+    total_fields = 0
+    present_confidences = []
+    for d in extracted:
+        for key in ("aum", "net_irr", "tvpi", "target_irr", "mgmt_fee", "carry"):
+            total_fields += 1
+            metric = d[key]
+            if metric["value"] is not None:
+                present_confidences.append(metric["confidence"])
+    conf_text = f"{(sum(present_confidences) / len(present_confidences)):.0%}" if present_confidences else "N/A"
+    lines.append(
+        f"- Data completeness: **{len(present_confidences)}/{total_fields}** core fields extracted "
+        f"(avg confidence **{conf_text}**)"
+    )
+
     if recommendation is None:
         recommendation = determine_recommendation(flags)
     lines.append(

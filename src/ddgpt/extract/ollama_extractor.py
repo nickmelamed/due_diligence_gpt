@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 import time
 from typing import List
 
@@ -20,11 +21,13 @@ from ddgpt.extract.llm_common import (
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
 # Local open-weight models generally carry a smaller usable context window
-# than hosted frontier models -- chunk more aggressively than Cohere.
+# than hosted frontier models; chunk more aggressively than Cohere.
 MAX_CHARS_PER_CALL = 24_000
 
 RETRY_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 2.0
+
+logger = logging.getLogger("ddgpt")
 
 
 def ollama_is_available(host: str = DEFAULT_OLLAMA_HOST, timeout: float = 1.0) -> bool:
@@ -76,6 +79,7 @@ DOCUMENT:
         last_error = None
 
         for attempt in range(RETRY_ATTEMPTS):
+            call_start = time.perf_counter()
             try:
                 resp = requests.post(
                     f"{self.host}/api/generate",
@@ -89,6 +93,12 @@ DOCUMENT:
                     timeout=180,
                 )
                 resp.raise_for_status()
+                latency = time.perf_counter() - call_start
+                logger.info(
+                    f"llm_call provider=ollama model={self.model} doc={doc_name} "
+                    f"attempt={attempt + 1} status=ok latency_s={latency:.3f}"
+                )
+
                 text = resp.json()["response"].strip()
 
                 data = safe_parse_json(text)
@@ -100,13 +110,21 @@ DOCUMENT:
                 return ExtractedDoc.model_validate(data)
 
             except Exception as e:
+                latency = time.perf_counter() - call_start
                 last_error = e
-                print(f" Ollama attempt {attempt + 1} failed: {e}")
+                logger.warning(
+                    f"llm_call provider=ollama model={self.model} doc={doc_name} "
+                    f"attempt={attempt + 1} status=error latency_s={latency:.3f} error={e!r}"
+                )
 
                 if attempt < RETRY_ATTEMPTS - 1:
                     time.sleep(RETRY_BACKOFF_SECONDS * (2 ** attempt))
 
-        print("Falling back to regex extraction")
+        logger.error(
+            f"llm_call provider=ollama model={self.model} doc={doc_name} "
+            f"status=exhausted attempts={RETRY_ATTEMPTS} last_error={last_error!r} "
+            f"fallback=regex"
+        )
         doc = RegexExtractor().extract(doc_name, pages)
         doc.notes.append(
             f"Ollama extraction failed after {RETRY_ATTEMPTS} attempts ({last_error}); "

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 import os
 import time
 from typing import List
@@ -29,6 +30,8 @@ MAX_CHARS_PER_CALL = 60_000
 
 RETRY_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 2.0
+
+logger = logging.getLogger("ddgpt")
 
 class CohereExtractor(Extractor):
     # Marks this extractor as sending document text to a third-party API,
@@ -71,29 +74,42 @@ DOCUMENT:
         last_error = None
 
         for attempt in range(RETRY_ATTEMPTS):
+            call_start = time.perf_counter()
             try:
                 resp = self.client.chat(model=self.model,
                                         message=msg,
                                         temperature=self.temperature)
+                latency = time.perf_counter() - call_start
+                logger.info(
+                    f"llm_call provider=cohere model={self.model} doc={doc_name} "
+                    f"attempt={attempt + 1} status=ok latency_s={latency:.3f}"
+                )
+
                 text = resp.text.strip()
 
                 data = safe_parse_json(text)
                 data = sanitize_extraction(data)
-                # doc_name must always be the real filename, never whatever
-                # title/name the model decided to report -- it drives
-                # authority weighting and cross-document flag labeling.
+                # doc_name must always be the real filename
                 data["doc_name"] = doc_name
 
                 return ExtractedDoc.model_validate(data)
 
             except Exception as e:
+                latency = time.perf_counter() - call_start
                 last_error = e
-                print(f" Cohere attempt {attempt + 1} failed: {e}")
+                logger.warning(
+                    f"llm_call provider=cohere model={self.model} doc={doc_name} "
+                    f"attempt={attempt + 1} status=error latency_s={latency:.3f} error={e!r}"
+                )
 
                 if attempt < RETRY_ATTEMPTS - 1:
                     time.sleep(RETRY_BACKOFF_SECONDS * (2 ** attempt))
 
-        print("Falling back to regex extraction")
+        logger.error(
+            f"llm_call provider=cohere model={self.model} doc={doc_name} "
+            f"status=exhausted attempts={RETRY_ATTEMPTS} last_error={last_error!r} "
+            f"fallback=regex"
+        )
         doc = RegexExtractor().extract(doc_name, pages)
         doc.notes.append(
             f"Cohere extraction failed after {RETRY_ATTEMPTS} attempts ({last_error}); "

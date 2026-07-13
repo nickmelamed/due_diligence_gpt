@@ -27,13 +27,10 @@ from ddgpt.report.tables import (
 
 load_dotenv()
 
-# Note: the "CropBox missing from /Page, defaulting to MediaBox" pdfminer
-# notice is suppressed in ddgpt.io.loaders (it logs via `logging`, not
-# `warnings.warn`, so a warnings filter here never actually caught it).
+
 
 # Cohere client + extractor/rule/pipeline construction is expensive and
-# stateless across uploads -- build it once per server process instead of
-# once per rerun.
+# stateless across uploads -- build it once per server process
 @st.cache_resource(show_spinner=False)
 def _get_pipeline():
     cfg = Config()
@@ -43,7 +40,7 @@ def _get_pipeline():
 
 # PDF parsing, OCR, and table extraction (Camelot/pdfplumber) are all CPU-heavy
 # and deterministic for a given file's bytes -- cache on content, not on the
-# throwaway temp-file path, so the same upload is never reparsed.
+# throwaway temp-file path
 @st.cache_data(show_spinner=False)
 def _load_document_cached(file_bytes: bytes, file_name: str, ocr_enabled: bool, ocr_dpi: int):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -51,9 +48,7 @@ def _load_document_cached(file_bytes: bytes, file_name: str, ocr_enabled: bool, 
         tmp.flush()
         loaded = load_document(tmp.name, ocr_enabled=ocr_enabled, ocr_dpi=ocr_dpi)
 
-    # load_document derives doc_name from the temp path; restore the
-    # user's real filename so authority weighting (which keys off
-    # doc_name substrings like "lpa"/"quarter"/"deck") actually works.
+    # load_document derives doc_name from the temp path
     return loaded.model_copy(update={"doc_name": file_name})
 
 st.set_page_config(
@@ -194,6 +189,8 @@ def candidates_dataframe(candidates):
 
 # Pipeline
 
+cfg, pipeline = _get_pipeline()
+
 if uploaded:
 
     current_hash = files_hash(uploaded)
@@ -211,8 +208,6 @@ if uploaded:
             "Running institutional diligence pipeline..."
         ):
 
-            cfg, pipeline = _get_pipeline()
-
             for f in uploaded:
                 docs.append(
                     _load_document_cached(
@@ -229,16 +224,16 @@ if uploaded:
                 result["extracted"]
             )
 
-            # Write to a temp path, not a relative "ic_memo.pdf" -- the
-            # latter silently overwrites the sample ic_memo.pdf checked into
-            # the repo root whenever this app is launched from there.
+            # Write to a temp path, not a relative "ic_memo.pdf" 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_tmp:
                 render_ic_pdf(
                     output_path=pdf_tmp.name,
                     memo=result["ic_memo"],
                     flags=result["flags"],
                     facts_df=facts_df,
-                    risk_score=result["risk_score"]
+                    risk_score=result["risk_score"],
+                    extracted=result["extracted"],
+                    recommendation=result["recommendation"]
                 )
 
                 pdf_tmp.seek(0)
@@ -266,10 +261,7 @@ if st.session_state.result:
             f"{result['risk_score']:.2f}"
         )
 
-    # Use the same deterministic recommendation shown in the IC memo below --
-    # this used to be a second, disconnected risk_score-threshold heuristic
-    # (PROCEED/INVESTIGATE/HIGH RISK) that could show a different verdict
-    # than the memo's (APPROVE/INVESTIGATE/PASS) for the same run.
+
     recommendation = result["recommendation"]["decision"]
 
     with col2:
@@ -397,12 +389,8 @@ if st.session_state.result:
 
     st.divider()
 
-    # Under the Hood -- Extraction Audit Trail
-    #
-    # Reproducibility view: every extractor's raw candidate value per field
-    # (not just the winner, not just disagreements), which one was selected
-    # and why (the trust-weight math), and any cross-extractor contradiction
-    # -- so the confidence score isn't a black box.
+    # Under the Hood - Extraction Audit Trail
+
 
     st.subheader("Under the Hood — Extraction Audit Trail")
     st.caption(

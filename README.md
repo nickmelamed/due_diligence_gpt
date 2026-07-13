@@ -63,6 +63,8 @@ Artifacts are written to `--out`:
 - `ic_memo.md` (IC-ready memo)
 - `ic_memo.pdf` (professional PDF export)
 - `run.log` (audit trail)
+- `audit_manifest.json` (reproducibility record: git commit, versions, input/output hashes, operator)
+- `run_summary.json` (stage timings, extractor availability, flags/risk/recommendation summary)
 
 ---
 

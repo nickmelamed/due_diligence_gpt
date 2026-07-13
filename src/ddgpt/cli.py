@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+from datetime import datetime, UTC
 import json
 import typer
 from dotenv import load_dotenv
@@ -15,7 +16,7 @@ from ddgpt.copilot.ic_copilot import ICCopilot
 from ddgpt.copilot.recommendation_engine import determine_recommendation
 from ddgpt.report.tables import to_facts_table
 from ddgpt.render.pdf_report import render_ic_pdf
-from ddgpt.provenance.audit import build_inputs_manifest
+from ddgpt.provenance.audit import build_inputs_manifest, build_audit_manifest
 from ddgpt.io.loaders import load_document
 
 app = typer.Typer(add_completion=False, help="DDGPT — Diligence extraction + contradiction flags (Cohere).")
@@ -70,7 +71,8 @@ def run(
     rules = build_rules(cfg)
     pipeline = build_pipeline(cfg, extractors, rules)
 
-    for name, status in extractor_availability(cfg).items():
+    avail = extractor_availability(cfg)
+    for name, status in avail.items():
         logger.info(f"extractor {name}: {status}")
 
     paths = discover_files(input)
@@ -106,13 +108,49 @@ def run(
             memo=result["ic_memo"],
             flags=result["flags"],
             facts_df=facts_df,
-            risk_score=result["risk_score"]
+            risk_score=result["risk_score"],
+            extracted=result["extracted"],
+            recommendation=result["recommendation"]
         )
+
+    output_names = ["config.json", "inputs.json", "extracted.json", "flags.json", "ic_memo.md", "facts_table.csv"]
+    if cfg.run.enable_pdf_output:
+        output_names.append("ic_memo.pdf")
+
+    manifest = build_audit_manifest(
+        input_paths=paths,
+        output_paths=[out_path / name for name in output_names],
+        cfg=cfg,
+        extractor_availability=avail,
+        result=result,
+    )
+    (out_path / "audit_manifest.json").write_text(json.dumps(manifest, indent=2))
+
+    # Lightweight, per-run observability record -- distinct from the audit
+    # manifest (which is a reproducibility/compliance record with hashes and
+    # git commit): this is meant to be cheap to parse and concatenate across
+    # many runs once multi-document aggregation exists.
+    severity_counts: dict = {}
+    for f in result["flags"]:
+        severity_counts[f["severity"]] = severity_counts.get(f["severity"], 0) + 1
+
+    run_summary = {
+        "generated_at_utc": datetime.now(UTC).isoformat(),
+        "document_count": len(docs),
+        "timings_s": result.get("timings"),
+        "extractor_availability": avail,
+        "flags_by_severity": severity_counts,
+        "risk_score": result["risk_score"],
+        "recommendation": result["recommendation"]["decision"],
+        "recommendation_confidence": result["recommendation"]["confidence"],
+    }
+    (out_path / "run_summary.json").write_text(json.dumps(run_summary, indent=2))
 
     logger.info(
         f"✅ run complete | docs={len(docs)} | flags={len(result['flags'])} | "
         f"risk_score={result['risk_score']:.3f} | "
-        f"recommendation={result['recommendation']['decision']}"
+        f"recommendation={result['recommendation']['decision']} | "
+        f"stage_timings_s={result.get('timings')}"
     )
 
 @app.command()
@@ -199,7 +237,9 @@ def report(
             memo=memo,
             flags=flags,
             facts_df=df,
-            risk_score=risk_score
+            risk_score=risk_score,
+            extracted=extracted,
+            recommendation=recommendation
         )
 
     logger.info("✅ reports written (table + IC memo)")
