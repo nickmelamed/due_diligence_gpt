@@ -18,11 +18,9 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 
 from reportlab.lib.enums import (
-    TA_CENTER,
-    TA_LEFT
+    TA_CENTER
 )
 
-from reportlab.platypus.flowables import Flowable
 
 from reportlab.lib.units import inch
 
@@ -39,7 +37,9 @@ from ddgpt.render.charts import (
     docs_flagged_for_metric,
     render_metric_reconciliation_chart,
 )
-from ddgpt.extract.metric_registry import CATEGORY_ORDER, CATEGORY_LABELS, category_for, display_label, format_metric_value
+from ddgpt.extract.metric_registry import (
+    CATEGORY_ORDER, CATEGORY_LABELS, category_for, display_label, format_metric_value,
+)
 from ddgpt.extract.quality import metric_confidences
 
 # Brand palette -- navy/gold institutional look, consistent with the dataviz
@@ -197,7 +197,11 @@ def add_page_chrome(canvas, doc):
 
     canvas.setFont("Helvetica", 9)
     canvas.setFillColor(colors.HexColor("#c7d2e0"))
-    canvas.drawString(48 + canvas.stringWidth("DDGPT ", "Helvetica-Bold", 12), PAGE_HEIGHT - HEADER_BAR_HEIGHT + 13, "Autonomous Diligence Workflows")
+    canvas.drawString(
+        48 + canvas.stringWidth("DDGPT ", "Helvetica-Bold", 12),
+        PAGE_HEIGHT - HEADER_BAR_HEIGHT + 13,
+        "Autonomous Diligence Workflows",
+    )
 
     canvas.setFont("Helvetica-Bold", 8)
     canvas.drawRightString(PAGE_WIDTH - 48, PAGE_HEIGHT - HEADER_BAR_HEIGHT + 13, "CONFIDENTIAL")
@@ -369,8 +373,14 @@ def build_title_block(
     story.append(Paragraph("Investment Committee Memorandum", styles["MemoTitle"]))
 
     meta_rows = [
-        [Paragraph("Prepared", styles["MetaLabel"]), Paragraph(datetime.now().strftime("%B %d, %Y"), styles["MetaValue"])],
-        [Paragraph("Prepared by", styles["MetaLabel"]), Paragraph("DDGPT Autonomous Diligence Engine", styles["MetaValue"])],
+        [
+            Paragraph("Prepared", styles["MetaLabel"]),
+            Paragraph(datetime.now().strftime("%B %d, %Y"), styles["MetaValue"]),
+        ],
+        [
+            Paragraph("Prepared by", styles["MetaLabel"]),
+            Paragraph("DDGPT Autonomous Diligence Engine", styles["MetaValue"]),
+        ],
         [Paragraph("Reviewed by", styles["MetaLabel"]), Paragraph("Pending IC assignment", styles["MetaValue"])],
     ]
     meta_table = Table(meta_rows, colWidths=[1.1 * inch, 4.5 * inch])

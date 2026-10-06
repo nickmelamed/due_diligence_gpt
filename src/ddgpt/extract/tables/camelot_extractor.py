@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import camelot
-import pandas as pd
 
-from pathlib import Path
 
 from ddgpt.extract.tables.table_models import ExtractedTable
 

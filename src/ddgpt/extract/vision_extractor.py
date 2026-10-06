@@ -29,7 +29,9 @@ CHART_CONFIDENCE = 0.60
 logger = logging.getLogger("ddgpt")
 
 
-def ollama_vision_is_available(host: str = DEFAULT_OLLAMA_HOST, model: str = DEFAULT_MODEL, timeout: float = 2.0) -> bool:
+def ollama_vision_is_available(
+    host: str = DEFAULT_OLLAMA_HOST, model: str = DEFAULT_MODEL, timeout: float = 2.0
+) -> bool:
     """Reachability + model-pulled check, mirroring ollama_extractor's
     ollama_is_available -- but this also confirms the specific vision model
     has actually been pulled, since an unpulled model fails per-page instead

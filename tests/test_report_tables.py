@@ -66,7 +66,9 @@ def test_to_facts_table_document_with_no_metrics_contributes_no_rows():
 
 
 def test_to_facts_table_carries_missing_fields_and_notes_per_row():
-    extracted = [_doc("A.pdf", None, [_metric("aum", 1.2e9, "usd")], missing_fields=["net_irr.value"], notes=["a note"])]
+    extracted = [
+        _doc("A.pdf", None, [_metric("aum", 1.2e9, "usd")], missing_fields=["net_irr.value"], notes=["a note"])
+    ]
     df = to_facts_table(extracted)
 
     row = df.iloc[0]

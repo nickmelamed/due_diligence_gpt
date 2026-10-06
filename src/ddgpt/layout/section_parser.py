@@ -91,7 +91,7 @@ def parse_sections(fitz_doc) -> Tuple[List[Section], List[Footnote]]:
     if not lines:
         return [], []
 
-    body_size = statistics.median(l["size"] for l in lines) or 10.0
+    body_size = statistics.median(line["size"] for line in lines) or 10.0
 
     sections: List[Section] = []
     footnotes: List[Footnote] = []
@@ -144,7 +144,7 @@ def parse_sections(fitz_doc) -> Tuple[List[Section], List[Footnote]]:
 
 def parse_sections_from_text(text: str, page_num: int = 1) -> Tuple[List[Section], List[Footnote]]:
     """Fallback section/footnote detection for plain-text documents with no font metadata."""
-    lines = [l.strip() for l in text.splitlines()]
+    lines = [line.strip() for line in text.splitlines()]
 
     sections: List[Section] = []
     footnotes: List[Footnote] = []

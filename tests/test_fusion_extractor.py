@@ -12,7 +12,9 @@ def _doc_with_aum(value, confidence):
     # _reconcile now reconciles from `metrics` (Phase 2), not the legacy
     # attribute directly -- a real extractor always dual-writes both (see
     # RegexExtractor/llm_common.py), so this fixture must too.
-    doc.metrics = [MetricEntry(name="aum", raw_label="AUM", unit="usd", value=value, confidence=confidence, evidence=evidence)]
+    doc.metrics = [
+        MetricEntry(name="aum", raw_label="AUM", unit="usd", value=value, confidence=confidence, evidence=evidence)
+    ]
     return doc
 
 

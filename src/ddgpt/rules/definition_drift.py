@@ -47,11 +47,15 @@ class DefinitionDriftRule(Rule):
                     docs=f'{A["doc_name"]} vs {B["doc_name"]}',
                     detail=f'Documents state different IRR return conventions: "{basis_a}" vs "{basis_b}".',
                     evidence=(
-                        f'{A["doc_name"]} (p.{ctx_a.get("page")}, {ctx_a.get("section") or "n/a"}): "{ctx_a.get("snippet")}" | '
-                        f'{B["doc_name"]} (p.{ctx_b.get("page")}, {ctx_b.get("section") or "n/a"}): "{ctx_b.get("snippet")}"'
+                        f'{A["doc_name"]} (p.{ctx_a.get("page")}, {ctx_a.get("section") or "n/a"}): '
+                        f'"{ctx_a.get("snippet")}" | '
+                        f'{B["doc_name"]} (p.{ctx_b.get("page")}, {ctx_b.get("section") or "n/a"}): '
+                        f'"{ctx_b.get("snippet")}"'
                     ),
                     why_it_matters="Definition drift can mislead IC comparisons and skew underwriting decisions.",
-                    question_to_ask="Confirm whether IRR reported is net or gross and reconcile to a consistent definition."
+                    question_to_ask=(
+                        "Confirm whether IRR reported is net or gross and reconcile to a consistent definition."
+                    )
                 ))
 
         for doc in extracted:
@@ -77,7 +81,10 @@ class DefinitionDriftRule(Rule):
                     f'Figure (p.{net_irr.get("evidence", {}).get("page")}): "{snippet}" | '
                     f'Convention (p.{ctx.get("page")}, {ctx.get("section") or "n/a"}): "{ctx.get("snippet")}"'
                 ),
-                why_it_matters="Inconsistent gross/net language within a single document is a red flag for underwriting rigor and can misstate performance.",
+                why_it_matters=(
+                    "Inconsistent gross/net language within a single document is a red flag for "
+                    "underwriting rigor and can misstate performance."
+                ),
                 question_to_ask="Confirm which convention actually governs the reported Net IRR figure."
             ))
 

@@ -4,13 +4,14 @@ from datetime import datetime, UTC
 import json
 import typer
 from dotenv import load_dotenv
-import pandas as pd
 from typing import List
 
 from ddgpt.config import Config
 from ddgpt.utils.logging import setup_logger
 from ddgpt.utils.cache import disk_cached, content_hash
-from ddgpt.pipeline.builders import build_extractors, build_rules, build_pipeline, build_chart_extractor, extractor_availability
+from ddgpt.pipeline.builders import (
+    build_extractors, build_rules, build_pipeline, build_chart_extractor, extractor_availability,
+)
 from ddgpt.risk.engine import RiskEngine
 from ddgpt.copilot.ic_copilot import ICCopilot
 from ddgpt.copilot.recommendation_engine import determine_recommendation
@@ -217,7 +218,8 @@ def report(
     cfg = _load_cfg(config)
     logger = setup_logger(str(Path(out) / "run.log"))
     extracted = json.loads((Path(out)/"extracted.json").read_text(encoding="utf-8"))
-    flags = json.loads((Path(out)/"flags.json").read_text(encoding="utf-8")) if (Path(out)/"flags.json").exists() else []
+    flags_file = Path(out)/"flags.json"
+    flags = json.loads(flags_file.read_text(encoding="utf-8")) if flags_file.exists() else []
 
     # structured table
     df = to_facts_table(extracted)
