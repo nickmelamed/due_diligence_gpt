@@ -18,6 +18,7 @@ where = ["src"]
 dev = [
     "ruff",
     "mypy",
+    "hypothesis",
     "types-PyYAML",
     "types-requests",
     "pandas-stubs",
