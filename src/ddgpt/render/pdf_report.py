@@ -40,7 +40,7 @@ from ddgpt.render.charts import (
 from ddgpt.extract.metric_registry import (
     CATEGORY_ORDER, CATEGORY_LABELS, category_for, display_label, format_metric_value,
 )
-from ddgpt.extract.quality import metric_confidences
+from ddgpt.extract.quality import core_metric_coverage, metric_confidences
 
 # Brand palette -- navy/gold institutional look, consistent with the dataviz
 # skill's status/categorical colors used in render/charts.py so the embedded
@@ -89,6 +89,8 @@ def compute_data_quality(extracted) -> list[dict]:
         rows.append({
             "doc_name": d.get("doc_name", ""),
             "metrics_found": len(present),
+            "core_found": core_metric_coverage(d)[0],
+            "core_total": core_metric_coverage(d)[1],
             "avg_confidence": (sum(present) / len(present)) if present else None,
             "fuzzy_matches": fuzzy,
             "not_found": not_found,
@@ -715,10 +717,11 @@ def build_data_quality_section(
 
     table_data = [[
         "Document",
-        "Metrics Found",
-        "Avg Confidence",
-        "Fuzzy Matches",
-        "Not Found"
+        "Metrics\nFound",
+        "Core\nMetrics",
+        "Avg\nConfidence",
+        "Fuzzy\nMatches",
+        "Not\nFound"
     ]]
 
     for row in data_quality:
@@ -726,6 +729,7 @@ def build_data_quality_section(
         table_data.append([
             Paragraph(html.escape(str(row["doc_name"]), quote=False), styles["TableCell"]),
             str(row["metrics_found"]),
+            f'{row["core_found"]}/{row["core_total"]}',
             "N/A" if avg_conf is None else f"{avg_conf:.0%}",
             str(row["fuzzy_matches"]),
             str(row["not_found"]),
@@ -733,7 +737,7 @@ def build_data_quality_section(
 
     table = Table(
         table_data,
-        colWidths=[2.6 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
+        colWidths=[2.0 * inch, 1.0 * inch, 1.0 * inch, 1.1 * inch, 1.0 * inch, 0.9 * inch]
     )
 
     table.setStyle(

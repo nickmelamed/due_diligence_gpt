@@ -16,7 +16,10 @@ class PDFPlumberTableExtractor:
                     if not table:
                         continue
 
-                    headers = table[0]
+                    # Empty header cells come back as None. A numbered
+                    # placeholder keeps their columns from colliding in the
+                    # row dicts.
+                    headers = [h if h else f"column_{i + 1}" for i, h in enumerate(table[0])]
 
                     rows = []
 
@@ -24,7 +27,8 @@ class PDFPlumberTableExtractor:
                         row_dict = {}
 
                         for i, h in enumerate(headers):
-                            row_dict[str(h)] = str(row[i])
+                            cell = row[i] if i < len(row) else None
+                            row_dict[h] = "" if cell is None else str(cell)
 
                         rows.append(row_dict)
 
@@ -32,7 +36,7 @@ class PDFPlumberTableExtractor:
                         ExtractedTable(
                             table_id=f"pdfplumber_{page_idx}_{t_idx}",
                             page=page_idx + 1,
-                            headers=headers,  # type: ignore[arg-type]  # None header cells raise (known bug)
+                            headers=headers,
                             rows=rows,
                             raw_text=str(table),
                             confidence=0.75

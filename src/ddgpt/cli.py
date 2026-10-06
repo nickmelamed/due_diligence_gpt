@@ -85,10 +85,10 @@ def run(
     out_path = Path(out)
     out_path.mkdir(parents=True, exist_ok=True)
 
-    (out_path / "config.json").write_text(json.dumps(cfg.dict(), indent=2))
+    (out_path / "config.json").write_text(json.dumps(cfg.model_dump(), indent=2))
 
     (out_path / "inputs.json").write_text(
-        json.dumps([m.dict() for m in build_inputs_manifest(paths)], indent=2)
+        json.dumps([m.model_dump() for m in build_inputs_manifest(paths)], indent=2)
     )
 
     (out_path / "extracted.json").write_text(
@@ -176,7 +176,7 @@ def extract(
     extracted = []
     for doc in docs:
         extracted_doc = pipeline.extractor.extract(doc.doc_name, doc.pages, doc.tables, doc.layout, path=doc.path)
-        extracted.append(extracted_doc.dict())
+        extracted.append(extracted_doc.model_dump())
 
     Path(out).mkdir(parents=True, exist_ok=True)
     (Path(out) / "extracted.json").write_text(json.dumps(extracted, indent=2))
@@ -204,7 +204,7 @@ def flag(
     flags, risk_score = risk_engine.evaluate(extracted)
 
     (Path(out) / "flags.json").write_text(
-        json.dumps([f.dict() for f in flags], indent=2)
+        json.dumps([f.model_dump() for f in flags], indent=2)
     )
 
     logger.info(f"✅ produced {len(flags)} flags | risk_score={risk_score:.3f}")
@@ -285,6 +285,7 @@ def eval(
             logger.info("eval PASS")
         else:
             logger.info(f"eval FAIL\nexpected={exp_pairs}\nactual={act_pairs}")
+            raise typer.Exit(code=1)
 
 if __name__ == "__main__":
     app()

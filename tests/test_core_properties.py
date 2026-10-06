@@ -1,8 +1,9 @@
 """Characterization and property tests for the numeric core.
 
-Tests marked "known bug" pin current behavior. See PROGRESS.md for the fixes.
+Hand-worked examples pin current behavior. Property tests check bounds and symmetry.
 """
 import math
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from hypothesis import given, strategies as st
@@ -119,13 +120,26 @@ def test_temporal_weight_is_neutral_for_unparseable_text():
     assert temporal_weight("not a date") == 0.5
 
 
-def test_temporal_weight_ignores_plain_dates_known_bug():
-    # Known bug (PROGRESS.md): a naive date minus an aware "now" raises
-    # TypeError, which is swallowed, so plain dates get 0.5. After the fix,
-    # assert a recent date is well above 0.5 and a future date clamps to 1.0.
-    assert temporal_weight("2024-01-01") == 0.5
-    assert temporal_weight("2020-01-01") == 0.5
-    assert temporal_weight("2999-01-01") == 0.5
+def test_temporal_weight_treats_a_plain_date_as_utc():
+    recent = (datetime.now(UTC) - timedelta(days=30)).date().isoformat()
+    assert temporal_weight(recent) == pytest.approx(1.0 - 30 / 3650, abs=1e-3)
+
+
+def test_temporal_weight_plain_and_aware_dates_agree():
+    plain = temporal_weight("2024-01-01")
+    aware = temporal_weight("2024-01-01T00:00:00+00:00")
+    assert plain == aware
+    assert plain != 0.5
+
+
+def test_temporal_weight_clamps_old_and_future_dates():
+    assert temporal_weight("2000-01-01") == 0.3
+    assert temporal_weight("2999-01-01") == 1.0
+
+
+@given(st.dates(min_value=date(1990, 1, 1), max_value=date(2100, 1, 1)))
+def test_temporal_weight_stays_between_floor_and_one(d):
+    assert 0.3 <= temporal_weight(d.isoformat()) <= 1.0
 
 
 def _tol(name, unit):

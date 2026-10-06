@@ -60,7 +60,7 @@ class DiligencePipeline:
             )
 
             extracted.append(
-                extracted_doc.dict()
+                extracted_doc.model_dump()
             )
 
             doc_duration = time.perf_counter() - doc_start
@@ -78,14 +78,14 @@ class DiligencePipeline:
         )
 
         recommendation = determine_recommendation(
-            [f.dict() for f in flags],
+            [f.model_dump() for f in flags],
             extracted
         )
 
         t1 = time.perf_counter()
         memo = self.copilot.generate(
             extracted,
-            [f.dict() for f in flags],
+            [f.model_dump() for f in flags],
             recommendation=recommendation
         )
         timings["memo_generation_s"] = round(time.perf_counter() - t1, 3)
@@ -95,7 +95,7 @@ class DiligencePipeline:
 
         return {
             "extracted": extracted,
-            "flags": [f.dict() for f in flags],
+            "flags": [f.model_dump() for f in flags],
             "risk_score": risk_score,
             "recommendation": recommendation,
             "ic_memo": memo,

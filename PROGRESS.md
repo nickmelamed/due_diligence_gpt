@@ -4,59 +4,37 @@ Current phase and remaining work. CLAUDE.md does not track status.
 
 ## Now
 
-Agent tooling is on `chore/agent-standards`, stacked on `wip/open-metrics`.
-Nothing is pushed.
-The gate (style, ruff, mypy, pytest) passes. 223 tests pass, 1 skipped.
+Known issues are fixed on `fix/known-issues`, stacked on `chore/agent-standards`.
+Nothing on this branch is pushed. `make ci` passes: 233 tests, 1 skipped.
 
-- [ ] Review and merge `wip/open-metrics`, then `chore/agent-standards`.
-- [ ] Fix bug 1: `postprocess.temporal_weight` returns 0.5 for any date
-  without a timezone. A naive datetime minus an aware `now` raises
-  `TypeError`, which `except Exception` swallows. Pinned by
-  `test_temporal_weight_ignores_plain_dates_known_bug`. `RegexExtractor` reads
-  `As-of Date: YYYY-MM-DD`, which is exactly the affected form, so the
-  recency term is wrong whenever that date is found.
-- [ ] Fix bug 2: `PDFPlumberTableExtractor` raises when a header cell is
-  `None`, and `EnsembleTableExtractor` swallows it, so every pdfplumber table
-  in that PDF is lost with only a printed message. Pinned in
-  `tests/test_pdfplumber_tables.py`. The `type: ignore` on that line marks it.
-  Short rows (`row[i]`) are a related risk.
+- [ ] Review PRs #1 (migration), #2 (standards), then the fixes PR. Merge in
+  that order and retarget each stacked PR to `main` after its base merges.
+- [ ] Watch the first CI run. The project-checks step is new and installs
+  tesseract, ghostscript and a headless JRE. It has not run on a clean runner.
 
 ## Next
 
-- [ ] Update `eval/scenarios/scenario_01/expected_flags.json`. It expects
-  `(MGMT_FEE_MISMATCH, RED)`, but `NumericMismatchRule` now emits
-  `PERCENT_MISMATCH` with `metric=mgmt_fee`. The severity still matches
-  (mgmt_fee is RED in the registry). Run `ddgpt eval` with Cohere and Ollama off to
-  confirm it fails first. Make `eval` exit non-zero on FAIL.
-- [ ] Define "data completeness" (SPEC section 8). Recommended: share of the
-  seven core metrics present per document.
-- [ ] Confirm which tolerances are judgments and which are tuning values
-  (SPEC section 7).
-- [ ] Enable the project-checks step in `.github/workflows/agent-checks.yml`
-  once `make setup && make ci` works on a clean runner. CI needs system
-  packages (tesseract, ghostscript, java) that the workflow does not install.
-- [ ] Fix `requires-python` in `pyproject.toml`. The code uses
-  `datetime.UTC`, so it needs 3.11 or newer, not 3.9.
-- [ ] Update the README "Repo Structure" section. It lists directories that
-  no longer match `src/ddgpt/`.
-- [ ] Untrack `ic_memo.pdf` at the repo root (generated output).
-- [ ] Replace `.dict()` with `.model_dump()` (pydantic deprecation warnings).
+- [ ] Confirm the tolerance split in SPEC section 7 (judgments versus tuning).
+- [ ] Confirm the SPEC items tagged INFERRED, and the summary in section 1.
+- [ ] Decide whether SPEC rule 6 (authority ordering) needs enforcement beyond
+  the confidence weight. Nothing ranks documents against each other today.
 - [ ] The guard hook blocks any command whose text mentions `.env`, even
   inside a heredoc.
 
 ## Done
 
 - [x] Open-metric migration committed from stash (`wip/open-metrics`).
-- [x] SPEC.md and DECISIONS.md drafted from the code. Items marked
-  [INFERRED] or [OPEN] need the owner's confirmation.
+- [x] SPEC.md and DECISIONS.md drafted from the code.
 - [x] Agent tooling installed, hooks smoke-tested, four repo skills added.
-- [x] Repo-wide style cleanup, ruff and mypy clean, gate widened.
+- [x] Repo-wide style cleanup, ruff and mypy clean, gate on `make agent-check`.
 - [x] Characterization and property tests for the numeric core.
-- [x] Removed the unused `scoring.temporal_weight`.
-
-## Open questions for the owner
-
-- Should the lower-authority-never-overrides rule (SPEC rule 6) be stronger
-  than confidence weighting? Nothing ranks documents against each other today.
-- Is `rules/` too broad in `.claude/protected-paths`?
-- Are the `sample_docs` and `ic_memo.pdf` fixtures what you want tracked?
+- [x] `temporal_weight` treats plain dates as UTC. Tests now assert the fix.
+- [x] pdfplumber tables with empty header cells are kept. Short rows and empty
+  cells become empty strings, and empty headers get `column_N` placeholders.
+- [x] Eval fixture updated to `(PERCENT_MISMATCH, RED)`. `eval` exits 1 on
+  FAIL and is covered by an offline test.
+- [x] Core metric coverage (found of seven) added to the memo and PDF.
+- [x] `requires-python` is `>=3.11`.
+- [x] `.dict()` replaced with `.model_dump()`.
+- [x] `ic_memo.pdf` untracked and ignored.
+- [x] README repo structure rewritten. CI project checks enabled.

@@ -48,6 +48,8 @@ def temporal_weight(doc_date: str | None) -> float:
     try:
         now = datetime.now(UTC)
         dt = datetime.fromisoformat(doc_date)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
         days = (now - dt).days
         return max(0.30, min(1.0, 1.0 - (days / 3650)))
     except Exception:

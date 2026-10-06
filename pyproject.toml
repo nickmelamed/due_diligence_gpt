@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ddgpt"
 version = "0.2.0"
 description = "Due Diligence GPT POC (Cohere)"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

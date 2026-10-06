@@ -249,19 +249,26 @@ Detects semantic inconsistencies such as:
 # Repo Structure
 
 ```text
-src/
-  copilot/
-  extract/
-    tables/
-  ingestion/
-  io/
-  pipeline/
-  provenance/
-  render/
-  report/
-  risk/
-  rules/
-  utils/
+src/ddgpt/
+  copilot/       IC memo generation and the recommendation rule
+  extract/       regex, Cohere, Ollama, and vision extractors, plus metric registry
+    tables/      Camelot and pdfplumber table extraction
+  ingestion/     PDF loading, OCR, and page rendering
+  io/            document loaders
+  layout/        sections, definitions, footnotes, and IRR mentions
+  pipeline/      fusion, scoring, and the orchestrator
+  provenance/    evidence model and audit manifest
+  render/        PDF report and charts
+  report/        memo text and facts table
+  risk/          risk score
+  rules/         flag rules
+  utils/         cache, hashing, logging, redaction
+scripts/         Streamlit app and demo runner
+prompts/         LLM prompts
+eval/            evaluation scenario
+sample_docs/     synthetic sample documents
+tests/           test suite
+docs/            SPEC.md and DECISIONS.md
 ```
 
 ---
