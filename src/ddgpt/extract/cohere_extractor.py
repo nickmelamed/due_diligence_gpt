@@ -13,8 +13,10 @@ from ddgpt.extract.regex_extractor import RegexExtractor
 from ddgpt.extract.llm_common import (
     chunk_pages,
     build_schema_hint,
+    build_known_metrics_hint,
     sanitize_extraction,
     merge_chunk_docs,
+    extract_with_evidence_retry,
 )
 
 try:
@@ -39,7 +41,7 @@ class CohereExtractor(Extractor):
     # cfg.run.redact_before_llm is enabled (see ddgpt.utils.redaction).
     IS_LLM_BACKED = True
 
-    def __init__(self, model: str, temperature: float, prompt_text: str):
+    def __init__(self, model: str, temperature: float, prompt_text: str, enable_evidence_retry: bool = True):
         if cohere is None:
             raise RuntimeError("cohere not installed. pip install -r requirements.txt")
         api_key = os.getenv("CO_API_KEY")
@@ -49,6 +51,7 @@ class CohereExtractor(Extractor):
         self.model = model
         self.temperature = temperature
         self.prompt_text = prompt_text
+        self.enable_evidence_retry = enable_evidence_retry
 
     def extract(self, doc_name: str, pages: List[Page]) -> ExtractedDoc:
         chunks = chunk_pages(pages, MAX_CHARS_PER_CALL)
@@ -60,9 +63,19 @@ class CohereExtractor(Extractor):
         return merge_chunk_docs(doc_name, chunk_docs, source_label="Cohere")
 
     def _extract_chunk(self, doc_name: str, pages: List[Page]) -> ExtractedDoc:
+        return extract_with_evidence_retry(
+            pages,
+            lambda: self._extract_chunk_attempt(doc_name, pages),
+            enable_retry=self.enable_evidence_retry,
+            doc_name=doc_name,
+        )
+
+    def _extract_chunk_attempt(self, doc_name: str, pages: List[Page]) -> ExtractedDoc:
         pages_block = "\n\n".join([f"--- PAGE {p.page_num} ---\n{p.text}" for p in pages])
 
         msg = f"""{self.prompt_text}
+
+{build_known_metrics_hint()}
 
 SCHEMA EXAMPLE (shape only):
 {json.dumps(build_schema_hint(doc_name))}

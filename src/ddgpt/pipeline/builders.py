@@ -17,12 +17,18 @@ def build_extractors(cfg):
     extractors = []
     if cfg.run.use_cohere and os.getenv("CO_API_KEY"):
         extractors.append(
-            CohereExtractor(cfg.model.model, cfg.model.temperature, prompt_text)
+            CohereExtractor(
+                cfg.model.model, cfg.model.temperature, prompt_text,
+                enable_evidence_retry=cfg.run.enable_evidence_retry,
+            )
         )
 
     if cfg.ollama.enabled and ollama_is_available(cfg.ollama.host):
         extractors.append(
-            OllamaExtractor(cfg.ollama.model, cfg.ollama.temperature, prompt_text, host=cfg.ollama.host)
+            OllamaExtractor(
+                cfg.ollama.model, cfg.ollama.temperature, prompt_text, host=cfg.ollama.host,
+                enable_evidence_retry=cfg.run.enable_evidence_retry,
+            )
         )
 
     extractors.append(RegexExtractor())
@@ -60,15 +66,11 @@ def build_chart_extractor(cfg):
 
 def build_rules(cfg):
     return [
-        NumericMismatchRule(
-            cfg.rules.aum_tolerance_pct,
-            cfg.rules.mgmt_fee_abs_pct,
-            cfg.rules.target_irr_abs_pct
-        ),
+        NumericMismatchRule(cfg.rules.tolerance),
         DefinitionDriftRule(),
         InternalInconsistencyRule(),
         ExtractorDisagreementRule(),
-        IRRMentionConflictRule(cfg.rules.internal_irr_mention_tolerance_pct),
+        IRRMentionConflictRule(cfg.rules.tolerance.internal_irr_mention_tolerance_pct),
     ]
 
 

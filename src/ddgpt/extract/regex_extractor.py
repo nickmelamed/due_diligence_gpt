@@ -5,10 +5,27 @@ from typing import List, Optional, Tuple
 
 from ddgpt.io.loaders import Page
 from ddgpt.extract.base import Extractor
-from ddgpt.extract.schemas import ExtractedDoc
+from ddgpt.extract.schemas import ExtractedDoc, MetricEntry
 from ddgpt.provenance.evidence import Evidence
 
 GAP = r"[\s\S]{0,80}?"
+
+def _add_metric(out: ExtractedDoc, name: str, raw_label: str, unit: str, value: float,
+                 confidence: float, page: Optional[int], snippet: str, basis: Optional[str] = None) -> None:
+    """Dual-write into the open-ended `metrics` list alongside the legacy
+    named field this extractor already sets -- see MetricEntry in
+    schemas.py. RegexExtractor's patterns target known registry metrics
+    directly, so name/unit are hardcoded per call site rather than run
+    through metric_registry.normalize_metric_name."""
+    out.metrics.append(MetricEntry(
+        name=name,
+        raw_label=raw_label,
+        unit=unit,
+        value=value,
+        basis=basis,
+        confidence=confidence,
+        evidence=Evidence(doc_name=out.doc_name, page=page, snippet=snippet),
+    ))
 
 def _find_in_pages(pages: List[Page], pattern: str) -> Tuple[Optional[str], Optional[int], str]:
     rgx = re.compile(pattern, flags=re.IGNORECASE)
@@ -42,6 +59,7 @@ class RegexExtractor(Extractor):
             out.aum.value = _parse_billion_to_usd(aum_b)
             out.aum.confidence = 0.55
             out.aum.evidence = Evidence(doc_name=doc_name, page=p_aum, snippet=sn_aum)
+            _add_metric(out, "aum", "AUM", "usd", out.aum.value, 0.55, p_aum, sn_aum)
         else:
             out.missing_fields.append("aum.value")
 
@@ -52,6 +70,7 @@ class RegexExtractor(Extractor):
             out.net_irr.value = float(net_irr)
             out.net_irr.confidence = 0.55
             out.net_irr.evidence = Evidence(doc_name=doc_name, page=p_irr, snippet=sn_irr)
+            _add_metric(out, "net_irr", "Net IRR", "percent", out.net_irr.value, 0.55, p_irr, sn_irr)
         else:
             out.missing_fields.append("net_irr.value")
 
@@ -62,6 +81,7 @@ class RegexExtractor(Extractor):
             out.tvpi.value = float(tvpi)
             out.tvpi.confidence = 0.55
             out.tvpi.evidence = Evidence(doc_name=doc_name, page=p_tvpi, snippet=sn_tvpi)
+            _add_metric(out, "tvpi", "TVPI", "multiple", out.tvpi.value, 0.55, p_tvpi, sn_tvpi)
         else:
             out.missing_fields.append("tvpi.value")
 
@@ -72,6 +92,7 @@ class RegexExtractor(Extractor):
             out.target_irr.value = float(target)
             out.target_irr.confidence = 0.55
             out.target_irr.evidence = Evidence(doc_name=doc_name, page=p_t, snippet=sn_t)
+            _add_metric(out, "target_irr", "Target IRR", "percent", out.target_irr.value, 0.55, p_t, sn_t)
         else:
             out.missing_fields.append("target_irr.value")
 
@@ -82,6 +103,7 @@ class RegexExtractor(Extractor):
             out.mgmt_fee.value = float(fee)
             out.mgmt_fee.confidence = 0.55
             out.mgmt_fee.evidence = Evidence(doc_name=doc_name, page=p_f, snippet=sn_f)
+            _add_metric(out, "mgmt_fee", "Management Fee", "percent", out.mgmt_fee.value, 0.55, p_f, sn_f)
         else:
             out.missing_fields.append("mgmt_fee.value")
 
@@ -98,11 +120,15 @@ class RegexExtractor(Extractor):
             sn = sn_c or sn_h
             pg = p_c or p_h
             out.carry.evidence = Evidence(doc_name=doc_name, page=pg, snippet=sn)
+            _add_metric(out, "carry", "Carried Interest", "percent", out.carry.value, 0.55, pg, sn)
         else:
             out.missing_fields.append("carry.value")
 
         if hurdle is not None:
             out.carry.hurdle = float(hurdle)
+            # hurdle_rate is its own comparable metric, not a compound
+            # attribute of carry -- see MetricEntry/registry.
+            _add_metric(out, "hurdle_rate", "Hurdle Rate", "percent", out.carry.hurdle, 0.55, p_h, sn_h)
         else:
             out.missing_fields.append("carry.hurdle")
 

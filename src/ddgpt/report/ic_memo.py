@@ -1,15 +1,9 @@
 from __future__ import annotations
 from typing import List, Dict, Any, Optional
 from ddgpt.copilot.recommendation_engine import determine_recommendation
+from ddgpt.extract.metric_registry import CATEGORY_ORDER, category_for, display_label, format_metric_value
+from ddgpt.extract.quality import metric_confidences
 
-def _fmt_money(x):
-    if x is None:
-        return "N/A"
-    if abs(x) >= 1e9:
-        return f"${x/1e9:.2f}B"
-    if abs(x) >= 1e6:
-        return f"${x/1e6:.2f}M"
-    return f"${x:,.0f}"
 
 def generate_ic_summary(
     extracted: List[Dict[str, Any]],
@@ -27,53 +21,58 @@ def generate_ic_summary(
     yellow = sum(1 for f in flags if f["severity"] == "YELLOW")
     lines.append(f"- Flags detected: **{red} RED**, **{yellow} YELLOW**")
 
-    total_fields = 0
-    present_confidences = []
-    for d in extracted:
-        for key in ("aum", "net_irr", "tvpi", "target_irr", "mgmt_fee", "carry"):
-            total_fields += 1
-            metric = d[key]
-            if metric["value"] is not None:
-                present_confidences.append(metric["confidence"])
-    conf_text = f"{(sum(present_confidences) / len(present_confidences)):.0%}" if present_confidences else "N/A"
+    confidences = metric_confidences(extracted)
+    conf_text = f"{(sum(confidences) / len(confidences)):.0%}" if confidences else "N/A"
     lines.append(
-        f"- Data completeness: **{len(present_confidences)}/{total_fields}** core fields extracted "
+        f"- Data completeness: **{len(confidences)}** metrics extracted across all documents "
         f"(avg confidence **{conf_text}**)"
     )
 
     if recommendation is None:
-        recommendation = determine_recommendation(flags)
+        recommendation = determine_recommendation(flags, extracted)
     lines.append(
         f'- Recommendation: **{recommendation["decision"]}** '
-        f'(confidence {recommendation["confidence"]:.2f})'
+        f'(data confidence {recommendation["confidence"]:.2f})'
     )
     lines.append("")
 
     lines.append("## Key Metrics by Source")
-    lines.append("| Source | As-of | AUM | Net IRR | TVPI | Target IRR | Mgmt Fee | Carry |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
     for d in extracted:
+        lines.append(f'### {d["doc_name"]}')
         asof = d.get("doc_date") or "N/A"
-        aum = _fmt_money(d["aum"]["value"])
-        nir = "N/A" if d["net_irr"]["value"] is None else f'{d["net_irr"]["value"]:.1f}%'
-        tv = "N/A" if d["tvpi"]["value"] is None else f'{d["tvpi"]["value"]:.2f}x'
-        tirr = "N/A" if d["target_irr"]["value"] is None else f'{d["target_irr"]["value"]:.1f}%'
-        fee = "N/A" if d["mgmt_fee"]["value"] is None else f'{d["mgmt_fee"]["value"]:.2f}%'
-        carry = "N/A"
-        if d["carry"]["value"] is not None and d["carry"]["hurdle"] is not None:
-            carry = f'{d["carry"]["value"]:.0f}% over {d["carry"]["hurdle"]:.0f}%'
-        elif d["carry"]["value"] is not None:
-            carry = f'{d["carry"]["value"]:.0f}%'
-        lines.append(f'| {d["doc_name"]} | {asof} | {aum} | {nir} | {tv} | {tirr} | {fee} | {carry} |')
-    lines.append("")
+        lines.append(f"- As-of: {asof}")
+
+        by_category: Dict[str, list] = {}
+        for m in d.get("metrics", []):
+            if m.get("value") is None:
+                continue
+            by_category.setdefault(category_for(m["name"]), []).append(m)
+
+        for category in CATEGORY_ORDER:
+            metrics = by_category.get(category)
+            if not metrics:
+                continue
+            for m in sorted(metrics, key=lambda x: display_label(x["name"])):
+                value_text = format_metric_value(m["value"], m.get("unit", "other"))
+                lines.append(f"- {display_label(m['name'])}: {value_text}")
+
+        if not d.get("metrics"):
+            lines.append("- No metrics extracted.")
+
+        lines.append("")
 
     lines.append("## Evidence")
     for d in extracted:
         lines.append(f'### {d["doc_name"]}')
-        lines.append(f'- AUM: p.{d["aum"]["evidence"]["page"]} — "{d["aum"]["evidence"]["snippet"]}"')
-        lines.append(f'- Mgmt Fee: p.{d["mgmt_fee"]["evidence"]["page"]} — "{d["mgmt_fee"]["evidence"]["snippet"]}"')
-        if d["net_irr"]["value"] is not None:
-            lines.append(f'- Net IRR: p.{d["net_irr"]["evidence"]["page"]} — "{d["net_irr"]["evidence"]["snippet"]}"')
+        has_evidence = False
+        for m in d.get("metrics", []):
+            if m.get("value") is None:
+                continue
+            has_evidence = True
+            evidence = m.get("evidence") or {}
+            lines.append(f'- {display_label(m["name"])}: p.{evidence.get("page")} — "{evidence.get("snippet")}"')
+        if not has_evidence:
+            lines.append("- No evidence-backed metrics for this document.")
         lines.append("")
 
     lines.append("## Flags Queue")

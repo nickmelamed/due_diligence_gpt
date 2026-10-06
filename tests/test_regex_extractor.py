@@ -45,3 +45,34 @@ def test_net_irr_extracted_without_colon_on_separate_line():
     doc = RegexExtractor().extract("doc.pdf", pages)
 
     assert doc.net_irr.value == 16.80
+
+
+def test_dual_writes_into_open_metrics_list():
+    # Every legacy field this extractor finds should also land in the new
+    # open-ended `metrics` list, so it participates in the dynamic-metric
+    # migration without waiting on the legacy attribute to be read.
+    text = (
+        "Management Fee: 2.00% on committed capital\n"
+        "Net IRR: 16.80%\n"
+        "TVPI: 1.62x\n"
+        "Carried Interest: 20% over an 8% preferred return"
+    )
+    pages = [Page(page_num=1, text=text)]
+
+    doc = RegexExtractor().extract("doc.pdf", pages)
+
+    by_name = {m.name: m for m in doc.metrics}
+    assert by_name["mgmt_fee"].value == 2.00
+    assert by_name["mgmt_fee"].unit == "percent"
+    assert by_name["mgmt_fee"].is_custom is False
+    assert by_name["net_irr"].value == 16.80
+    assert by_name["tvpi"].value == 1.62
+    assert by_name["tvpi"].unit == "multiple"
+    assert by_name["carry"].value == 20.0
+    assert by_name["hurdle_rate"].value == 8.0
+    assert by_name["hurdle_rate"].unit == "percent"
+
+
+def test_metrics_list_empty_when_nothing_found():
+    doc = RegexExtractor().extract("doc.pdf", [Page(page_num=1, text="no financial data here")])
+    assert doc.metrics == []

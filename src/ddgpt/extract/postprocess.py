@@ -1,18 +1,24 @@
 from __future__ import annotations
 
-import re
-import difflib
 from typing import List
 from datetime import datetime, UTC
 
 from ddgpt.io.loaders import Page
-from ddgpt.extract.schemas import ExtractedDoc
+from ddgpt.extract.schemas import ExtractedDoc, sync_legacy_fields
 from ddgpt.pipeline.scoring import final_confidence
+from ddgpt.extract.evidence import get_page_text, classify_evidence_match, EVIDENCE_SCORE_BY_MATCH
 
-# A snippet scoring at or above this on the fuzzy match is treated as "found,
-# with noise" (e.g. OCR substitutions, hyphenation, ligatures) rather than
-# "not found" -- a strict verbatim-substring bar has no tolerance for either.
-FUZZY_MATCH_THRESHOLD = 0.80
+# The six legacy named fields (+ hurdle, tracked under carry) -- still
+# checked explicitly for "missing" status, since a document simply not
+# mentioning some never-seen-before custom metric isn't "missing" the way
+# a document lacking one of these well-known ones is.
+CORE_METRIC_NAMES = ("aum", "net_irr", "tvpi", "target_irr", "mgmt_fee", "carry", "hurdle_rate")
+
+# Extra discount stacked on top of the usual evidence-match score when a
+# metric's final value only came from a second extraction attempt (see
+# llm_common.extract_with_evidence_retry) -- a call that needed retrying is
+# a slightly weaker signal even when it ultimately produced a clean citation.
+RETRY_PENALTY = 0.9
 
 DEFAULT_AUTHORITY_WEIGHTS = {
     "lpa": 0.98,
@@ -47,33 +53,6 @@ def temporal_weight(doc_date: str | None) -> float:
     except Exception:
         return 0.50
 
-def normalize(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip().lower()
-
-def get_page_text(pages: List[Page], page_num: int | None) -> str:
-    if page_num is None:
-        return ""
-
-    for p in pages:
-        if p.page_num == page_num:
-            return p.text or ""
-
-    return ""
-
-def fuzzy_match_ratio(snippet: str, page_text: str) -> float:
-    """Fraction of snippet's characters coverable by matching blocks against
-    page_text, in order. 1.0 for an exact substring; degrades gracefully for
-    OCR substitutions, hyphenation breaks, or ligature differences instead of
-    an all-or-nothing verbatim check."""
-    if not snippet:
-        return 0.0
-    if snippet in page_text:
-        return 1.0
-
-    matcher = difflib.SequenceMatcher(None, page_text, snippet, autojunk=False)
-    matched_chars = sum(block.size for block in matcher.get_matching_blocks())
-    return matched_chars / len(snippet)
-
 def verify_metric(metric, key: str, pages, authority, recency, notes, missing_fields):
     if metric.value is None:
         if f"{key}.value" not in missing_fields:
@@ -83,31 +62,22 @@ def verify_metric(metric, key: str, pages, authority, recency, notes, missing_fi
 
     extraction_conf = metric.confidence
 
-    snippet = normalize(metric.evidence.snippet)
-    page_text = normalize(get_page_text(pages, metric.evidence.page))
+    page_text = get_page_text(pages, metric.evidence.page)
+    match = classify_evidence_match(metric.evidence.snippet, page_text)
+    evidence_score = EVIDENCE_SCORE_BY_MATCH[match.label]
 
-    evidence_score = 1.0
-
-    if not snippet:
-        evidence_score *= 0.50
+    if match.label == "missing":
         notes.append(f"{key}: missing evidence snippet")
+    elif match.label == "fuzzy":
+        notes.append(
+            f"{key}: evidence snippet matched page fuzzily "
+            f"({match.ratio:.0%} — likely OCR/rendering noise, not verbatim)"
+        )
+    elif match.label == "not_found":
+        notes.append(f"{key}: evidence snippet not found verbatim on cited page")
 
-    else:
-        match_ratio = fuzzy_match_ratio(snippet, page_text)
-
-        if match_ratio >= 1.0:
-            pass  # exact verbatim match
-
-        elif match_ratio >= FUZZY_MATCH_THRESHOLD:
-            evidence_score *= 0.75
-            notes.append(
-                f"{key}: evidence snippet matched page fuzzily "
-                f"({match_ratio:.0%} — likely OCR/rendering noise, not verbatim)"
-            )
-
-        else:
-            evidence_score *= 0.40
-            notes.append(f"{key}: evidence snippet not found verbatim on cited page")
+    if getattr(metric, "needed_retry", False):
+        evidence_score *= RETRY_PENALTY
 
     agreement = getattr(metric, "agreement", 1.0)
 
@@ -127,64 +97,23 @@ def verify_and_score(
     authority = authority_weight(doc.doc_name, authority_weights, authority_default_weight)
     recency = temporal_weight(doc.doc_date)
 
-    verify_metric(
-        doc.aum,
-        "aum",
-        pages,
-        authority,
-        recency,
-        doc.notes,
-        doc.missing_fields
-    )
+    # Every metric FusionExtractor reconciled -- known registry metrics and
+    # customs alike -- gets the same evidence-verification treatment. Every
+    # entry here already has a value (Phase 1's cleaning drops anything
+    # without one), so verify_metric's missing-field branch never actually
+    # fires from this loop; see the explicit core-field check below for
+    # that.
+    for metric in doc.metrics:
+        verify_metric(metric, metric.name, pages, authority, recency, doc.notes, doc.missing_fields)
 
-    verify_metric(
-        doc.net_irr,
-        "net_irr",
-        pages,
-        authority,
-        recency,
-        doc.notes,
-        doc.missing_fields
-    )
+    present_names = {m.name for m in doc.metrics}
+    for name in CORE_METRIC_NAMES:
+        marker = "carry.hurdle" if name == "hurdle_rate" else f"{name}.value"
+        if name not in present_names and marker not in doc.missing_fields:
+            doc.missing_fields.append(marker)
 
-    verify_metric(
-        doc.tvpi,
-        "tvpi",
-        pages,
-        authority,
-        recency,
-        doc.notes,
-        doc.missing_fields
-    )
-
-    verify_metric(
-        doc.target_irr,
-        "target_irr",
-        pages,
-        authority,
-        recency,
-        doc.notes,
-        doc.missing_fields
-    )
-
-    verify_metric(
-        doc.mgmt_fee,
-        "mgmt_fee",
-        pages,
-        authority,
-        recency,
-        doc.notes,
-        doc.missing_fields
-    )
-
-    verify_metric(
-        doc.carry,
-        "carry",
-        pages,
-        authority,
-        recency,
-        doc.notes,
-        doc.missing_fields
-    )
+    # Re-sync now that verification has adjusted each entry's confidence --
+    # otherwise the legacy fields would reflect pre-verification confidence.
+    sync_legacy_fields(doc)
 
     return doc

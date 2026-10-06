@@ -1,5 +1,5 @@
 from ddgpt.config import Config
-from ddgpt.extract.schemas import ExtractedDoc, Metric
+from ddgpt.extract.schemas import ExtractedDoc, Metric, MetricEntry
 from ddgpt.pipeline.fusion_extractor import FusionExtractor
 from ddgpt.extract.postprocess import authority_weight
 
@@ -10,9 +10,11 @@ def test_fusion_extractor_uses_configured_weights_not_hardcoded_defaults():
 
     doc_regex = ExtractedDoc(doc_name="x")
     doc_regex.aum = Metric(value=1.0e9, confidence=0.9)  # would win under default weights
+    doc_regex.metrics = [MetricEntry(name="aum", raw_label="AUM", unit="usd", value=1.0e9, confidence=0.9)]
 
     doc_cohere = ExtractedDoc(doc_name="x")
     doc_cohere.aum = Metric(value=2.0e9, confidence=0.9)
+    doc_cohere.metrics = [MetricEntry(name="aum", raw_label="AUM", unit="usd", value=2.0e9, confidence=0.9)]
 
     fe = FusionExtractor(
         extractors=[],

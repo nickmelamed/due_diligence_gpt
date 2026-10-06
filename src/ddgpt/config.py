@@ -42,17 +42,35 @@ class VisionConfig(BaseModel):
     max_pages: int = 20
     prompt: str = "chart_extract_v1.txt"
 
-class RuleConfig(BaseModel):
-    aum_tolerance_pct: float = 0.03
-    mgmt_fee_abs_pct: float = 0.25
-    target_irr_abs_pct: float = 2.0
+class ToleranceConfig(BaseModel):
+    """Cross-document numeric-mismatch tolerance, keyed by a metric's unit
+    type rather than one hardcoded float per named field -- so a metric
+    NumericMismatchRule has never seen before (any registry entry beyond
+    the original six, or a fully custom one) still gets a sensible default
+    tolerance instead of no check at all."""
+    usd_rel_pct: float = 0.03          # relative tolerance, e.g. AUM/fund size/NAV
+    percent_abs_pts: float = 2.0       # absolute-point tolerance, e.g. IRR variants
+    multiple_rel_pct: float = 0.05     # relative tolerance, e.g. TVPI/DPI/RVPI/MOIC
+    count_abs: float = 1.0             # absolute tolerance, e.g. portfolio company count
+    year_abs: float = 0.0              # vintage year should match exactly across docs describing the same fund
 
-    # Deliberately tighter than target_irr_abs_pct: that tolerance is for
+    # Per-metric overrides take priority over the unit-type default above.
+    # Seeded with mgmt_fee's original, tighter-than-general-percent
+    # tolerance (also mirrored on the registry's own MetricDef.tolerance_override,
+    # which NumericMismatchRule checks first).
+    per_metric_overrides: Dict[str, dict] = Field(default_factory=lambda: {
+        "mgmt_fee": {"abs_pts": 0.25},
+    })
+
+    # Deliberately tighter than percent_abs_pts: that tolerance is for
     # *cross-document* comparison, where some drift is expected (different
     # as-of dates, marketing vs underwriting). This is for a *single*
     # document contradicting itself, where even a couple points of
     # difference paired with a different gross/net label is suspicious.
     internal_irr_mention_tolerance_pct: float = 1.0
+
+class RuleConfig(BaseModel):
+    tolerance: ToleranceConfig = Field(default_factory=ToleranceConfig)
 
 class OCRConfig(BaseModel):
     enabled: bool = True
@@ -107,6 +125,13 @@ class RunConfig(BaseModel):
     # LLM API. Local-only extraction (use_cohere=False, no Ollama) never
     # leaves the machine at all regardless of this flag.
     redact_before_llm: bool = False
+
+    # When a registry-recognized metric's evidence snippet doesn't hold up
+    # against the source page text, re-issue that extraction call once more
+    # before accepting the result (see llm_common.extract_with_evidence_retry).
+    # Doubles worst-case LLM calls for chunks that trigger it -- disable for
+    # large batch runs where latency/cost matters more than this safety net.
+    enable_evidence_retry: bool = True
 
 class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig)
