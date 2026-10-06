@@ -7,3 +7,7 @@ __pycache__/
 outputs/
 due_gpt/
 *egg-info/
+
+# Claude Code agent tooling
+.claude/.gate-state.json
+.claude/settings.local.json

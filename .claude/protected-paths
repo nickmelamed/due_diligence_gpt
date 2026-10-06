@@ -1,0 +1,33 @@
+# Edits to these paths need the owner's approval, even in auto mode.
+# One glob per line, relative to the repo root. "*" crosses directories and a
+# trailing "/" means everything under it. Text after "  #" is the reason.
+#
+# The agent's own settings, this list, gate-commands, style-ignore,
+# style-words, and scripts/agent/ are always protected by guard_edit.py,
+# whatever this file says.
+CLAUDE.md  # the project's instructions to Claude
+.claude/rules/  # path-scoped standards
+.claude/agents/  # reviewer agents
+.claude/skills/  # repo procedures
+Makefile  # defines agent-check and ci
+pyproject.toml  # dependencies and lint, type, and test configuration
+setup.cfg  # tool configuration
+pytest.ini  # test selection
+tox.ini  # test selection
+.pre-commit-config.yaml  # commit hooks
+.github/workflows/  # CI
+*.lock  # locked dependencies
+package-lock.json  # locked dependencies
+# Integrity files for ddgpt. Edits need the owner's approval.
+.env  # API key
+.env.*  # environment files
+eval/  # evaluation scenario and expected flags
+sample_docs/  # synthetic input documents used as fixtures
+prompts/  # LLM prompts that define extraction and memo behavior
+src/ddgpt/extract/metric_registry.py  # metric names, units, tolerances, severities
+src/ddgpt/extract/evidence.py  # evidence matching that sets confidence
+src/ddgpt/extract/quality.py  # shared confidence and data-quality figures
+src/ddgpt/pipeline/scoring.py  # confidence formula
+src/ddgpt/risk/engine.py  # risk score
+src/ddgpt/copilot/recommendation_engine.py  # recommendation thresholds
+src/ddgpt/rules/  # flag rules
