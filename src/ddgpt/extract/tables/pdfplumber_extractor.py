@@ -32,7 +32,7 @@ class PDFPlumberTableExtractor:
                         ExtractedTable(
                             table_id=f"pdfplumber_{page_idx}_{t_idx}",
                             page=page_idx + 1,
-                            headers=headers,  # type: ignore[arg-type]  # None header cells raise, see PROGRESS.md
+                            headers=headers,  # type: ignore[arg-type]  # None header cells raise (known bug)
                             rows=rows,
                             raw_text=str(table),
                             confidence=0.75

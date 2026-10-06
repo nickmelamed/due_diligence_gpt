@@ -1,21 +1,20 @@
 # Progress
 
-Current phase and what is left. Claude updates this at the end of each
-phase. CLAUDE.md stays stable and does not track status. The "Now" section
-is shown to Claude at the start of each session and after compaction.
+Current phase and remaining work. CLAUDE.md does not track status.
 
 ## Now
 
-Agent standards (v2.0.0) are installed on `chore/agent-standards`, stacked on
-`wip/open-metrics`. Waiting on the owner's review before anything is pushed.
+Agent tooling is on `chore/agent-standards`, stacked on `wip/open-metrics`.
+Nothing is pushed.
 The gate (style, ruff, mypy, pytest) passes. 223 tests pass, 1 skipped.
 
 - [ ] Review and merge `wip/open-metrics`, then `chore/agent-standards`.
 - [ ] Fix bug 1: `postprocess.temporal_weight` returns 0.5 for any date
   without a timezone. A naive datetime minus an aware `now` raises
   `TypeError`, which `except Exception` swallows. Pinned by
-  `test_temporal_weight_ignores_plain_dates_known_bug`. `doc_date` is
-  currently always `None`, so impact is latent.
+  `test_temporal_weight_ignores_plain_dates_known_bug`. `RegexExtractor` reads
+  `As-of Date: YYYY-MM-DD`, which is exactly the affected form, so the
+  recency term is wrong whenever that date is found.
 - [ ] Fix bug 2: `PDFPlumberTableExtractor` raises when a header cell is
   `None`, and `EnsembleTableExtractor` swallows it, so every pdfplumber table
   in that PDF is lost with only a printed message. Pinned in
@@ -25,8 +24,9 @@ The gate (style, ruff, mypy, pytest) passes. 223 tests pass, 1 skipped.
 ## Next
 
 - [ ] Update `eval/scenarios/scenario_01/expected_flags.json`. It expects
-  `MGMT_FEE_MISMATCH`, but `NumericMismatchRule` now emits `PERCENT_MISMATCH`
-  with `metric=mgmt_fee`. Run `ddgpt eval` with Cohere and Ollama off to
+  `(MGMT_FEE_MISMATCH, RED)`, but `NumericMismatchRule` now emits
+  `PERCENT_MISMATCH` with `metric=mgmt_fee`. The severity still matches
+  (mgmt_fee is RED in the registry). Run `ddgpt eval` with Cohere and Ollama off to
   confirm it fails first. Make `eval` exit non-zero on FAIL.
 - [ ] Define "data completeness" (SPEC section 8). Recommended: share of the
   seven core metrics present per document.
@@ -42,7 +42,7 @@ The gate (style, ruff, mypy, pytest) passes. 223 tests pass, 1 skipped.
 - [ ] Untrack `ic_memo.pdf` at the repo root (generated output).
 - [ ] Replace `.dict()` with `.model_dump()` (pydantic deprecation warnings).
 - [ ] The guard hook blocks any command whose text mentions `.env`, even
-  inside a heredoc. Report upstream to the standards skill.
+  inside a heredoc.
 
 ## Done
 

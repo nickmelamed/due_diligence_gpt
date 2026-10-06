@@ -1,8 +1,7 @@
 # Design decisions
 
-Drafted from the code and its comments. Written plainly so they can be edited
-into your own words. Each entry says what was chosen, why the code suggests it,
-and what it costs. Entries are **[INFERRED]** unless noted.
+Drafted from the code and its comments. Each entry gives the choice, the likely
+reason, and the cost. Entries are inferred unless noted. Edit freely.
 
 ## D-001: Ensemble of regex and LLMs, not one extractor
 Regex is deterministic and trusted most (0.95). Cohere (0.70) and a local Ollama
@@ -11,7 +10,7 @@ every candidate. Cost: disagreements need a flag, and trust weights are guesses
 that live in config.
 
 ## D-002: Open metric set instead of six fixed fields
-The original schema had six named fields. It now holds a list of metrics with a
+The schema holds a list of metrics, with a
 registry of known names and free slugs for the rest. Comparison keys off the
 unit type, so unseen metrics still get a tolerance. Cost: legacy fields stay in
 sync through `sync_legacy_fields`, and one rule (InternalInconsistency) still reads
@@ -39,8 +38,7 @@ discarded value is recorded and a flag asks a human to check it.
 ## D-007: Recommendation is deterministic and the LLM only writes the memo
 Decision thresholds are in code (2 RED = PASS, and so on). The prompt tells the LLM
 to restate the decision and to base risks only on flags. The `confidence` shown
-is extraction quality, not decision confidence. This was changed after APPROVE
-used to show the lowest confidence of the three tiers.
+is extraction quality, not decision confidence.
 
 ## D-008: Risk score saturates and is de-emphasized
 `1 - exp(-w/2)` rises with flag count and severity, so ten RED flags differ from
@@ -58,13 +56,12 @@ never competes on score. Footnotes linked to the table are copied into notes.
 A vision model reads chart images, off by default because of cost (one call per
 page, 20 pages max). Confidence is capped at 0.60. It is skipped when
 redaction is on. `qwen2.5vl:7b` was chosen after `llava` misread a test chart
-and `llama3.2-vision` stopped working on current Ollama (per README and config
-comments).
+and `llama3.2-vision` stopped working on current Ollama.
 
 ## D-012: Disk cache keyed on a schema fingerprint
 Pickle cache entries are keyed on extractor, model, prompt, content, and a
-hash of every model field name. After a stale pickle crashed the pipeline when
-a field was added, any schema change now misses old entries. Cost: a model added
+hash of every model field name. Any schema change misses old entries, so a stale
+pickle cannot crash the pipeline. Cost: a model added
 to a cached object must also be added to the fingerprint list.
 
 ## D-013: Redaction is narrow and off by default

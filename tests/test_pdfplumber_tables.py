@@ -43,10 +43,9 @@ def test_extracts_a_table_with_complete_headers(monkeypatch):
 
 
 def test_empty_header_cell_raises_known_bug(monkeypatch):
-    # Known bug, to be fixed after the standards work (see PROGRESS.md).
-    # pdfplumber reports an empty header cell as None, but
-    # ExtractedTable.headers is List[str], so the whole extractor raises.
-    # When this is fixed, the table should be returned, so flip this test.
+    # Known bug (PROGRESS.md): pdfplumber returns None for an empty header
+    # cell, but ExtractedTable.headers is list[str], so the extractor raises.
+    # Flip this test when fixed.
     _patch_pdf(monkeypatch, [[[["Fund", None], ["Atlas", "18%"]]]])
 
     with pytest.raises(ValidationError):
@@ -54,8 +53,8 @@ def test_empty_header_cell_raises_known_bug(monkeypatch):
 
 
 def test_ensemble_swallows_the_failure_and_drops_every_pdfplumber_table(monkeypatch, capsys):
-    # Known bug, same cause as above. One bad table on page 2 also loses the
-    # good table on page 1, and the only signal is a printed message.
+    # Same cause. The bad table on page 2 also drops the good table on page 1,
+    # and only a printed message signals it.
     good = [["Fund", "IRR"], ["Atlas", "18%"]]
     bad = [["Fund", None], ["Atlas", "18%"]]
     _patch_pdf(monkeypatch, [[good], [bad]])

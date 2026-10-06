@@ -1,7 +1,6 @@
 """Characterization and property tests for the numeric core.
 
-These pin what the code does today. Where today's behavior looks wrong, the
-test says so and names the follow-up in PROGRESS.md.
+Tests marked "known bug" pin current behavior. See PROGRESS.md for the fixes.
 """
 import math
 
@@ -18,8 +17,6 @@ from ddgpt.utils.cache import content_hash, disk_cached
 finite = st.floats(min_value=-1e12, max_value=1e12, allow_nan=False, allow_infinity=False)
 unit_interval = st.floats(min_value=0.0, max_value=1.0, allow_nan=False)
 
-
-# compute_agreement
 
 def test_agreement_is_one_with_fewer_than_two_values():
     assert compute_agreement([]) == 1.0
@@ -50,8 +47,6 @@ def test_agreement_is_symmetric(a, b):
     assert compute_agreement([a, b]) == compute_agreement([b, a])
 
 
-# pct_delta
-
 def test_pct_delta_worked_example():
     assert pct_delta(100.0, 110.0) == pytest.approx(10.0 / 105.0)
 
@@ -70,8 +65,6 @@ def test_pct_delta_is_symmetric_and_bounded(a, b):
 def test_pct_delta_of_equal_values_is_zero(a):
     assert pct_delta(a, a) == 0.0
 
-
-# final_confidence
 
 def test_final_confidence_weights_sum_to_one():
     assert final_confidence(1.0, 1.0, 1.0, 1.0) == pytest.approx(1.0)
@@ -92,8 +85,6 @@ def test_final_confidence_is_monotonic_in_each_input(base, a, b, c):
     assert 0.0 <= low <= 1.0 + 1e-9
 
 
-# risk score
-
 @given(st.lists(st.sampled_from(["RED", "YELLOW"]), max_size=40))
 def test_risk_score_is_in_unit_interval(severities):
     assert 0.0 <= RiskEngine.score_from_severities(severities) < 1.0
@@ -113,8 +104,6 @@ def test_unknown_severity_counts_as_point_three():
     assert RiskEngine.score_from_severities(["ORANGE"]) == pytest.approx(1.0 - math.exp(-0.3 / 2.0))
 
 
-# temporal_weight
-
 def test_temporal_weight_is_neutral_without_a_date():
     assert temporal_weight(None) == 0.5
     assert temporal_weight("") == 0.5
@@ -131,17 +120,13 @@ def test_temporal_weight_is_neutral_for_unparseable_text():
 
 
 def test_temporal_weight_ignores_plain_dates_known_bug():
-    # Known bug, to be fixed after the standards work (see PROGRESS.md).
-    # A date without a timezone is subtracted from an aware "now", the
-    # TypeError is swallowed, and every plain date gets the neutral 0.5.
-    # When this is fixed, a recent plain date should score well above 0.5
-    # and a future one should clamp to 1.0, so flip these assertions.
+    # Known bug (PROGRESS.md): a naive date minus an aware "now" raises
+    # TypeError, which is swallowed, so plain dates get 0.5. After the fix,
+    # assert a recent date is well above 0.5 and a future date clamps to 1.0.
     assert temporal_weight("2024-01-01") == 0.5
     assert temporal_weight("2020-01-01") == 0.5
     assert temporal_weight("2999-01-01") == 0.5
 
-
-# tolerance selection in NumericMismatchRule
 
 def _tol(name, unit):
     return NumericMismatchRule(ToleranceConfig())._tolerance_for(name, unit)
@@ -165,8 +150,6 @@ def test_aum_mismatch_is_red_and_unknown_metrics_are_yellow():
     assert rule._severity_for("aum") == "RED"
     assert rule._severity_for("some_custom_metric") == "YELLOW"
 
-
-# cache keys
 
 def test_content_hash_is_stable_and_24_hex_chars():
     key = content_hash("a", "b", b"c")
