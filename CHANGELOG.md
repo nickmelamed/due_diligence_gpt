@@ -13,6 +13,7 @@ Keep a Changelog, and versions follow Semantic Versioning.
 
 - Core metric coverage (found of seven) in the memo and PDF data-quality table.
 - Offline tests for `ddgpt eval`.
+- Tests that authority only scales confidence and conflicts become flags.
 
 ### Changed
 

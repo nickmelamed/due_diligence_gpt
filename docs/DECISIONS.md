@@ -1,7 +1,7 @@
 # Design decisions
 
 Drafted from the code and its comments. Each entry gives the choice, the likely
-reason, and the cost. Entries are inferred unless noted. Edit freely.
+reason, and the cost. The owner has confirmed them. Edit freely.
 
 ## D-001: Ensemble of regex and LLMs, not one extractor
 Regex is deterministic and trusted most (0.95). Cohere (0.70) and a local Ollama

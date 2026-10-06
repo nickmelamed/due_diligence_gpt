@@ -4,22 +4,14 @@ Current phase and remaining work. CLAUDE.md does not track status.
 
 ## Now
 
-Known issues are fixed on `fix/known-issues`, stacked on `chore/agent-standards`.
-Nothing on this branch is pushed. `make ci` passes: 233 tests, 1 skipped.
+Open items are resolved on `chore/resolve-open-items`. Nothing on this branch
+is pushed. `make agent-check` passes.
 
-- [ ] Review PRs #1 (migration), #2 (standards), then the fixes PR. Merge in
-  that order and retarget each stacked PR to `main` after its base merges.
-- [ ] Watch the first CI run. The project-checks step is new and installs
-  tesseract, ghostscript and a headless JRE. It has not run on a clean runner.
+- [ ] Review the PR for this branch.
 
 ## Next
 
-- [ ] Confirm the tolerance split in SPEC section 7 (judgments versus tuning).
-- [ ] Confirm the SPEC items tagged INFERRED, and the summary in section 1.
-- [ ] Decide whether SPEC rule 6 (authority ordering) needs enforcement beyond
-  the confidence weight. Nothing ranks documents against each other today.
-- [ ] The guard hook blocks any command whose text mentions `.env`, even
-  inside a heredoc.
+Nothing is queued.
 
 ## Done
 
@@ -38,3 +30,8 @@ Nothing on this branch is pushed. `make ci` passes: 233 tests, 1 skipped.
 - [x] `.dict()` replaced with `.model_dump()`.
 - [x] `ic_memo.pdf` untracked and ignored.
 - [x] README repo structure rewritten. CI project checks enabled.
+- [x] SPEC tolerance split, authority rule, and tags confirmed by the owner.
+  Rule 6 now says authority only scales confidence, and `tests/test_authority.py`
+  checks that conflicts become flags without overwriting a value.
+- [x] Standards upgraded to v2.0.1. The guard hook no longer blocks heredoc
+  text for `cat` or `tee` that names the environment file.
