@@ -102,8 +102,7 @@ evidence_score`, with the retry penalty applied to the evidence score.
 Authority comes from the first substring of the lowercased filename found in
 `TrustConfig.authority_weights` (lpa 0.98 down to deck 0.55, default 0.50).
 Recency decays linearly over ten years (floor 0.30, 0.50 with no date).
-`postprocess.temporal_weight` has a known bug that gives plain `YYYY-MM-DD`
-dates the neutral 0.50 (see PROGRESS.md).
+Dates without a timezone are treated as UTC, and future dates clamp to 1.0.
 
 ## 6. Recommendation  [INFERRED]
 - 2 or more RED flags: PASS. 1 RED, or 3 or more YELLOW: INVESTIGATE. Otherwise
@@ -130,8 +129,10 @@ Default tolerances: USD 3% relative, percent 2.0 points, multiples 5% relative,
 counts 1, years exact. Management fee uses 0.25 points.
 Risk score is `1 - exp(-sum(weights)/2)` with RED 1.0 and YELLOW 0.5. It
 saturates toward 1.0 and is meant to be de-emphasized next to the flag list.
-Open: which of these tolerances are deliberate judgments to pin, and which are
-tuning defaults?
+Proposed split, open for the owner to confirm: the management fee 0.25 points,
+exact vintage year, and RED for aum, mgmt_fee, carry and hurdle_rate are
+judgments. The USD, percent, multiple and count defaults are tuning values.
+`tests/test_core_properties.py` pins the current values.
 
 ## 8. Data quality in the report  [CONFIRMED]
 "Metrics found" counts the metrics present per document, not a fixed six.
@@ -151,11 +152,9 @@ memo. Average confidence uses the same helper as the recommendation
 ## 10. Evaluation  [INFERRED]
 `ddgpt eval` runs `eval/scenarios/scenario_01` and compares sorted
 `(type, severity)` pairs to `expected_flags.json`, logging PASS or FAIL. It
-exits 0 either way.
-Open: the fixture expects `(MGMT_FEE_MISMATCH, RED)`, but `NumericMismatchRule`
-now emits `PERCENT_MISMATCH` with `metric=mgmt_fee`, so the type no longer
-matches and the eval likely fails. The severity still matches. Not run, since
-it calls LLMs.
+exits 1 on FAIL. The fixture expects `(PERCENT_MISMATCH, RED)` with
+`metric=mgmt_fee`, which matches regex-only extraction. `tests/test_eval_command.py`
+runs it offline. A run with Cohere or Ollama active can add flags and fail.
 
 ## 11. Checks  [CONFIRMED]
 The Stop gate runs `check_style.py --changed`, `ruff check`, `mypy` (configured
@@ -164,4 +163,3 @@ for `src`), and `pytest -x -q`. Current status is in PROGRESS.md.
 ## 12. Non-goals and known limits  [INFERRED]
 - Not an investment decision tool, and not citation-grade for chart values.
 - Cohere and Ollama are the only providers.
-- The README repo-structure section is out of date.
