@@ -27,6 +27,8 @@ def test_counts_whatever_metrics_are_actually_present_not_a_fixed_six():
     assert len(rows) == 1
     assert rows[0]["metrics_found"] == 6
     assert "fields_total" not in rows[0]
+    # carry, hurdle_rate, mgmt_fee, and aum are core. The other two are not.
+    assert (rows[0]["core_found"], rows[0]["core_total"]) == (4, 7)
 
 
 def test_avg_confidence_none_when_no_metrics():

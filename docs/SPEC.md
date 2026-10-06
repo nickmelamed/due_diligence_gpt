@@ -133,11 +133,13 @@ saturates toward 1.0 and is meant to be de-emphasized next to the flag list.
 Open: which of these tolerances are deliberate judgments to pin, and which are
 tuning defaults?
 
-## 8. Data quality in the report  [INFERRED]
+## 8. Data quality in the report  [CONFIRMED]
 "Metrics found" counts the metrics present per document, not a fixed six.
-Average confidence uses the same helper as the recommendation
-(`extract/quality.py`), so the two agree. Open: define "data completeness". The
-code reports counts and a mean, not a ratio against an expected set.
+"Core metric coverage" is the share of the seven core metrics (aum, net_irr,
+tvpi, target_irr, mgmt_fee, carry, hurdle_rate) that have a value in a
+document, shown as `found/7` in the PDF and summed across documents in the
+memo. Average confidence uses the same helper as the recommendation
+(`extract/quality.py`), so the two agree.
 
 ## 9. Privacy and cost controls  [INFERRED]
 - `redact_before_llm` (default off) masks emails, SSNs, phones, and account

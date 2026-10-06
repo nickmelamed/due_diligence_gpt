@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional
 from ddgpt.copilot.recommendation_engine import determine_recommendation
 from ddgpt.extract.metric_registry import CATEGORY_ORDER, category_for, display_label, format_metric_value
-from ddgpt.extract.quality import metric_confidences
+from ddgpt.extract.quality import core_metric_coverage, metric_confidences
 
 
 def generate_ic_summary(
@@ -27,6 +27,11 @@ def generate_ic_summary(
         f"- Data completeness: **{len(confidences)}** metrics extracted across all documents "
         f"(avg confidence **{conf_text}**)"
     )
+    if extracted:
+        coverage = [core_metric_coverage(d) for d in extracted]
+        found = sum(f for f, _ in coverage)
+        total = sum(t for _, t in coverage)
+        lines.append(f"- Core metric coverage: **{found} of {total}** core metrics found across documents")
 
     if recommendation is None:
         recommendation = determine_recommendation(flags, extracted)

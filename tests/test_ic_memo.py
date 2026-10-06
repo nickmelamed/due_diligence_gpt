@@ -60,3 +60,13 @@ def test_generate_ic_summary_no_flags_message():
     extracted = [_doc("A.pdf", None, [])]
     summary = generate_ic_summary(extracted, flags=[])
     assert "No flags detected." in summary
+
+
+def test_generate_ic_summary_reports_core_metric_coverage_across_documents():
+    extracted = [
+        _doc("A.pdf", None, [_metric("aum", 1.2e9, "usd"), _metric("net_irr", 16.8, "percent")]),
+        _doc("B.pdf", None, [_metric("mgmt_fee", 2.0, "percent")]),
+    ]
+    summary = generate_ic_summary(extracted, flags=[])
+
+    assert "Core metric coverage: **3 of 14**" in summary
