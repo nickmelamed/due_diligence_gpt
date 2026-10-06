@@ -37,8 +37,7 @@ class MetricEntry(BaseModel):
     name (is_custom=False) or a slugified version of whatever label the
     extractor found (is_custom=True) -- see
     ddgpt.extract.metric_registry.normalize_metric_name. Additive alongside
-    the legacy fields for now; see the phased rollout plan for when those
-    get retired in favor of this list."""
+    the legacy fields until those get retired in favor of this list."""
     name: str
     raw_label: str = ""
     unit: str = "other"  # "usd" | "percent" | "multiple" | "count" | "year" | "other"

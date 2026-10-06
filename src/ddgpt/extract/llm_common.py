@@ -371,7 +371,7 @@ def extract_with_evidence_retry(
 ) -> ExtractedDoc:
     """Calls `attempt_fn()` (one full extraction attempt -- including its
     own transport-level retries and regex fallback -- returning an
-    ExtractedDoc) once; if any registry-recognized metric's evidence
+    ExtractedDoc) once. If any registry-recognized metric's evidence
     doesn't hold up against the real source page text, tries once more and
     keeps whichever attempt has fewer such failures (the first attempt
     wins a tie, since a second call isn't guaranteed to be better and

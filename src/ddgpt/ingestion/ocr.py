@@ -9,7 +9,7 @@ DEFAULT_OCR_DPI = 300
 
 
 def ocr_page_image(page, dpi: int = DEFAULT_OCR_DPI) -> str:
-    """OCR a single already-open fitz page object; returns extracted text."""
+    """OCR a single already-open fitz page object and return the extracted text."""
     pix = page.get_pixmap(dpi=dpi)
     img = Image.open(io.BytesIO(pix.tobytes("png")))
     return pytesseract.image_to_string(img)

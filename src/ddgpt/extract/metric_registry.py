@@ -183,7 +183,7 @@ def slugify(text: str) -> str:
 
 
 def normalize_metric_name(raw_label: str) -> Tuple[str, bool]:
-    """Match a raw label against the seed registry's aliases; fall back to a
+    """Match a raw label against the seed registry's aliases, falling back to a
     stable slug if nothing matches. Returns (name, is_custom)."""
     if not raw_label:
         return "unknown_metric", True

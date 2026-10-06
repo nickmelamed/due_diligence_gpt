@@ -59,7 +59,7 @@ class NumericMismatchRule(Rule):
         self.tolerance = tolerance_config
 
     def _tolerance_for(self, name: str, unit: str) -> Tuple[str, float]:
-        """Returns (kind, threshold); kind is "relative" (a fraction of the
+        """Returns (kind, threshold). Kind is "relative" (a fraction of the
         average of the two values) or "absolute" (a flat difference)."""
         metric_def = get_metric_def(name)
         override = None

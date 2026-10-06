@@ -13,7 +13,7 @@ def attach_footnotes_to_tables(
     """Associate footnotes with the tables on the same page.
 
     Table extraction (Camelot/pdfplumber) and footnote detection run as
-    separate passes over the PDF; this links them back together so a
+    separate passes over the PDF. This links them back together so a
     footnote qualifying a figure in a fee/performance table travels with
     that table instead of being silently dropped.
     """

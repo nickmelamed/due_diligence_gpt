@@ -78,7 +78,7 @@ class OCRConfig(BaseModel):
 
 class TrustConfig(BaseModel):
     """Extractor trust priors and document-authority weights. Previously
-    hardcoded constants in fusion_extractor.py/postprocess.py; exposed here
+    hardcoded constants in fusion_extractor.py/postprocess.py. Exposed here
     so trust priors can be tuned per engagement without a code change."""
 
     extractor_weights: Dict[str, float] = Field(default_factory=lambda: {
