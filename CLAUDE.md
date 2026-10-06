@@ -7,9 +7,9 @@ across and within documents, and writes an evidence-cited Investment Committee
 memo. A human reads the output. "Good" means every number traces to a page and
 snippet, and nothing is guessed.
 
-The full design lives in docs/SPEC.md. Read the relevant section before
-changing anything it covers. Current status and next steps are in
-PROGRESS.md. Design decisions and their reasons are in docs/DECISIONS.md.
+See docs/SPEC.md for the design, docs/DECISIONS.md for the reasons behind it,
+and PROGRESS.md for status. Read the relevant SPEC section before changing
+what it covers.
 
 ## Non-negotiable rules
 
@@ -25,8 +25,8 @@ PROGRESS.md. Design decisions and their reasons are in docs/DECISIONS.md.
 5. Runs stay reproducible. Cache keys include `SCHEMA_FINGERPRINT`, so add any
    new model nested in `ExtractedDoc` to that fingerprint list.
 6. A lower-authority document must not silently override a higher one.
-7. The recommendation comes from `determine_recommendation`. The LLM memo
-   restates it. Its confidence is extraction quality, not decision quality.
+7. The recommendation comes from `determine_recommendation`. The memo restates
+   it. Its confidence measures extraction quality.
 8. Never weaken a test, lint rule, or check to make it pass.
 9. Ask before changing anything in `.claude/protected-paths`, the evaluation
    design, dependencies, CI, or hooks.
@@ -59,8 +59,7 @@ Use the project venv (`due_gpt/`). Never print or commit `.env`.
 
 - Plan before multi-file changes. Write the plan down and wait for approval
   when the task spans several modules or touches the spec.
-- A task is done when the Stop hook's checks pass and you have shown the
-  output. Show evidence (commands and results), not claims.
+- A task is done when the Stop hook's checks pass. Include the command output.
 - Commit in small atomic Conventional Commits (`type(scope): subject`). Code
   and its tests go in the same commit.
 - You may branch and commit locally. Ask before pushing, opening or merging

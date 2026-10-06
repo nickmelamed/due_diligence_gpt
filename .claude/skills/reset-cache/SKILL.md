@@ -4,13 +4,8 @@ description: Delete the .cache directory after a schema, prompt, or model change
 disable-model-invocation: true
 ---
 
-Clear the disk cache.
-
 1. List what is in `.cache/` (namespaces and file counts) and show it.
-2. Say why a reset is needed. The cache key already includes the schema
-   fingerprint, the prompt text, and the model, so a reset is only needed
-   when something outside those changed, such as extractor code or table
-   parsing.
+2. The key already covers schema fingerprint, prompt, and model. Reset only
+   after changes outside those, such as extractor or table-parsing code.
 3. Delete `.cache/` after the owner confirms the listing.
-4. Cached pages and extractions rebuild on the next run, which costs LLM
-   calls again.
+4. The next run rebuilds the cache and repeats the LLM calls.

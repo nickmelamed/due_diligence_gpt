@@ -31,3 +31,6 @@ src/ddgpt/pipeline/scoring.py  # confidence formula
 src/ddgpt/risk/engine.py  # risk score
 src/ddgpt/copilot/recommendation_engine.py  # recommendation thresholds
 src/ddgpt/rules/  # flag rules
+src/ddgpt/extract/postprocess.py  # confidence scoring, retry penalty, authority weights
+src/ddgpt/config.py  # trust weights, tolerances, and extraction defaults
+src/ddgpt/extract/schemas.py  # extraction schema and cache fingerprint

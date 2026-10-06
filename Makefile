@@ -1,6 +1,6 @@
 .PHONY: setup install run test eval lint typecheck test-fast style agent-check ci
 
-PY ?= python3
+PY ?= $(if $(wildcard due_gpt/bin/python),due_gpt/bin/python,python3)
 
 setup:
 	$(PY) -m pip install -r requirements.txt
@@ -12,16 +12,16 @@ run:
 	python -m ddgpt run --input sample_docs --out outputs/run_demo
 
 lint:
-	ruff check .
+	$(PY) -m ruff check .
 
 typecheck:
-	mypy
+	$(PY) -m mypy
 
 test:
-	pytest -q
+	$(PY) -m pytest -q
 
 test-fast:
-	pytest -x -q -m "not slow"
+	$(PY) -m pytest -x -q -m "not slow"
 
 eval:
 	python -m ddgpt eval --scenario eval/scenarios/scenario_01 --out outputs/eval_run
