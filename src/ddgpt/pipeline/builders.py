@@ -98,7 +98,9 @@ def extractor_availability(cfg) -> dict:
     if not cfg.vision.enabled:
         status["VisionChartExtractor"] = "disabled in config"
     elif cfg.vision.provider != "ollama":
-        status["VisionChartExtractor"] = f"skipped: unsupported provider '{cfg.vision.provider}' (only 'ollama' implemented)"
+        status["VisionChartExtractor"] = (
+            f"skipped: unsupported provider '{cfg.vision.provider}' (only 'ollama' implemented)"
+        )
     elif not ollama_vision_is_available(cfg.vision.host, cfg.vision.model):
         status["VisionChartExtractor"] = (
             f"skipped: model '{cfg.vision.model}' not pulled/reachable at {cfg.vision.host} "

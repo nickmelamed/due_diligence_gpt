@@ -7,7 +7,9 @@ import fitz
 DEFAULT_RENDER_DPI = 200
 
 
-def render_pages_png(path: str, dpi: int = DEFAULT_RENDER_DPI, page_numbers: Optional[List[int]] = None) -> Dict[int, bytes]:
+def render_pages_png(
+    path: str, dpi: int = DEFAULT_RENDER_DPI, page_numbers: Optional[List[int]] = None
+) -> Dict[int, bytes]:
     """Rasterize PDF pages to PNG bytes, keyed by 1-indexed page number.
 
     Reuses the same fitz pixmap technique as ocr_page_image, but returns the

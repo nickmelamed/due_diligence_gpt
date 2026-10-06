@@ -39,7 +39,7 @@ def find_irr_mentions(pages: List[Page]) -> List[dict]:
 
     A secondary claim stated once in prose (e.g. "targeting a 20% gross
     IRR" in a quarterly-update paragraph) never becomes a structured field
-    on its own; this makes it visible so a rule can compare it against
+    on its own. This makes it visible so a rule can compare it against
     whatever *did* get extracted, instead of the discrepancy silently
     living only in an LLM's free-text notes.
     """

@@ -20,7 +20,10 @@ class ICCopilot:
 
     def generate(self, extracted, flags, recommendation=None):
         if self.client is None:
-            logger.info("llm_call provider=cohere stage=memo_generation status=skipped reason=no_api_key fallback=template")
+            logger.info(
+                "llm_call provider=cohere stage=memo_generation status=skipped "
+                "reason=no_api_key fallback=template"
+            )
             return generate_ic_summary(extracted, flags, recommendation=recommendation)
 
         recommendation_instruction = ""

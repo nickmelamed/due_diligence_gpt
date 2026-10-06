@@ -184,7 +184,7 @@ class FusionExtractor:
         so a well-cited competing candidate wins over an ungrounded one
         even when its raw self-reported confidence is nominally lower. Does
         NOT touch the persisted confidence of whichever entry ultimately
-        wins; that's postprocess.verify_metric's job, applied once to the
+        wins. That's postprocess.verify_metric's job, applied once to the
         single winner. `pages` is optional (defaults to a neutral 1.0, no
         discount) so callers that reconcile without real page text --
         existing tests included -- see unchanged behavior."""
@@ -318,7 +318,7 @@ class FusionExtractor:
 
     def _record_table_candidate(self, base, metric_name, entry):
         """Table-sourced fallback is a distinct source from the extractor
-        ensemble; recorded as its own candidate, and any existing pseudo
+        ensemble. It is recorded as its own candidate, and any existing pseudo
         winner (an extractor that "won" a field no extractor actually found
         a value for) is demoted so exactly one candidate is ever marked the
         winner."""

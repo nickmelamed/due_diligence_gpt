@@ -10,7 +10,7 @@ class IRRMentionConflictRule(Rule):
     Investor Update paragraph elsewhere says "targeting a 20% gross IRR".
 
     Structured extraction only reliably captures the primary, cleanly
-    labeled figure per field; a secondary claim buried in prose has
+    labeled figure per field. A secondary claim buried in prose has
     nowhere to land except an LLM's free-text notes, where no rule can see
     it. This scans every IRR-shaped mention in the document (see
     ddgpt.layout.irr_mentions) and flags ones that don't reconcile with

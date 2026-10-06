@@ -120,7 +120,11 @@ def render_irr_reconciliation_chart(figures: List[Dict[str, Any]]) -> Optional[b
     ax.tick_params(axis="x", length=0)
 
     has_conflict = any(f["status"] == "conflict" for f in figures)
-    title = "IRR Figures Across Source Documents" if not has_conflict else "Unreconciled IRR Figures Across Source Documents"
+    title = (
+        "IRR Figures Across Source Documents"
+        if not has_conflict
+        else "Unreconciled IRR Figures Across Source Documents"
+    )
     ax.set_title(title, fontsize=11, fontweight="bold", color=COLOR_NAVY, pad=14)
 
     fig.tight_layout()

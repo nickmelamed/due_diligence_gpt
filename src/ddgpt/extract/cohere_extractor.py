@@ -22,7 +22,7 @@ from ddgpt.extract.llm_common import (
 try:
     import cohere
 except Exception:
-    cohere = None
+    cohere = None  # type: ignore[assignment]  # optional dependency
 
 # Conservative character budget per call. Long LPAs/quarterly reports can run
 # well past a single context window; rather than silently truncating (and

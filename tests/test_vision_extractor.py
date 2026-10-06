@@ -1,6 +1,5 @@
 import json as json_mod
 
-import pytest
 
 from ddgpt.extract.vision_extractor import OllamaVisionExtractor, ollama_vision_is_available
 from ddgpt.ingestion.page_render import render_pages_png

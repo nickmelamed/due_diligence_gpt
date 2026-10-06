@@ -75,7 +75,7 @@ class FinancialTableParser:
         """Open-ended counterpart to parse_metrics(): one entry per distinct
         metric name found across every table row, not just the three known
         fields -- a row whose label matches the metric registry (see
-        ddgpt.extract.metric_registry) uses that metric's known unit; a row
+        ddgpt.extract.metric_registry) uses that metric's known unit. A row
         that doesn't match anything registered is still captured as a
         lower-confidence custom entry (slugified label) rather than
         silently dropped, provided it actually has a $/%/x-shaped value.

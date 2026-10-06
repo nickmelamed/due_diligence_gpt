@@ -72,7 +72,10 @@ class DiligencePipeline:
         t0 = time.perf_counter()
         flags, risk_score = self.risk_engine.evaluate(extracted)
         timings["risk_rules_s"] = round(time.perf_counter() - t0, 3)
-        logger.info(f"stage=risk_rules duration_s={timings['risk_rules_s']:.3f} flags={len(flags)} risk_score={risk_score:.3f}")
+        logger.info(
+            f"stage=risk_rules duration_s={timings['risk_rules_s']:.3f} "
+            f"flags={len(flags)} risk_score={risk_score:.3f}"
+        )
 
         recommendation = determine_recommendation(
             [f.dict() for f in flags],

@@ -38,7 +38,7 @@ def get_page_text(pages: List, page_num: Optional[int]) -> str:
 def fuzzy_match_ratio(snippet: str, page_text: str) -> float:
     """Fraction of a normalized snippet's characters coverable by matching
     blocks against normalized page_text, in order. 1.0 for an exact
-    substring; degrades gracefully for OCR substitutions, hyphenation
+    substring. It degrades gracefully for OCR substitutions, hyphenation
     breaks, or ligature differences instead of an all-or-nothing verbatim
     check. Both arguments must already be normalize()-d."""
     if not snippet:

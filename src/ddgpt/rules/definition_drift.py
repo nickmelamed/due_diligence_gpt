@@ -33,10 +33,10 @@ class DefinitionDriftRule(Rule):
             for j in range(i + 1, len(extracted)):
                 A = extracted[i]
                 B = extracted[j]
-                ctx_a = A.get("net_irr_basis")
-                ctx_b = B.get("net_irr_basis")
-                basis_a = (ctx_a or {}).get("basis")
-                basis_b = (ctx_b or {}).get("basis")
+                ctx_a = A.get("net_irr_basis") or {}
+                ctx_b = B.get("net_irr_basis") or {}
+                basis_a = ctx_a.get("basis")
+                basis_b = ctx_b.get("basis")
 
                 if not basis_a or not basis_b or basis_a == basis_b:
                     continue
@@ -47,11 +47,15 @@ class DefinitionDriftRule(Rule):
                     docs=f'{A["doc_name"]} vs {B["doc_name"]}',
                     detail=f'Documents state different IRR return conventions: "{basis_a}" vs "{basis_b}".',
                     evidence=(
-                        f'{A["doc_name"]} (p.{ctx_a.get("page")}, {ctx_a.get("section") or "n/a"}): "{ctx_a.get("snippet")}" | '
-                        f'{B["doc_name"]} (p.{ctx_b.get("page")}, {ctx_b.get("section") or "n/a"}): "{ctx_b.get("snippet")}"'
+                        f'{A["doc_name"]} (p.{ctx_a.get("page")}, {ctx_a.get("section") or "n/a"}): '
+                        f'"{ctx_a.get("snippet")}" | '
+                        f'{B["doc_name"]} (p.{ctx_b.get("page")}, {ctx_b.get("section") or "n/a"}): '
+                        f'"{ctx_b.get("snippet")}"'
                     ),
                     why_it_matters="Definition drift can mislead IC comparisons and skew underwriting decisions.",
-                    question_to_ask="Confirm whether IRR reported is net or gross and reconcile to a consistent definition."
+                    question_to_ask=(
+                        "Confirm whether IRR reported is net or gross and reconcile to a consistent definition."
+                    )
                 ))
 
         for doc in extracted:
@@ -59,8 +63,8 @@ class DefinitionDriftRule(Rule):
             snippet = ((net_irr.get("evidence") or {}).get("snippet")) or ""
             local_basis = _local_basis(snippet)
 
-            ctx = doc.get("net_irr_basis")
-            doc_basis = (ctx or {}).get("basis")
+            ctx = doc.get("net_irr_basis") or {}
+            doc_basis = ctx.get("basis")
 
             if not local_basis or not doc_basis or local_basis == doc_basis:
                 continue
@@ -77,7 +81,10 @@ class DefinitionDriftRule(Rule):
                     f'Figure (p.{net_irr.get("evidence", {}).get("page")}): "{snippet}" | '
                     f'Convention (p.{ctx.get("page")}, {ctx.get("section") or "n/a"}): "{ctx.get("snippet")}"'
                 ),
-                why_it_matters="Inconsistent gross/net language within a single document is a red flag for underwriting rigor and can misstate performance.",
+                why_it_matters=(
+                    "Inconsistent gross/net language within a single document is a red flag for "
+                    "underwriting rigor and can misstate performance."
+                ),
                 question_to_ask="Confirm which convention actually governs the reported Net IRR figure."
             ))
 

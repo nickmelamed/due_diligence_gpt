@@ -2,7 +2,7 @@
 
 This repo is a proof-of-concept for AI-enabled investment due diligence workflows.
 
-For a more comprehensive overview and motivation, check out the design doc [here](https://docs.google.com/document/d/1SKHU_lYtQejw2OVNPCbj42KtVMGRmEKW9S3xc7w0iU4/edit?tab=t.0#heading=h.lb5ydoxel954). 
+For a fuller overview and motivation, check out the design doc [here](https://docs.google.com/document/d/1SKHU_lYtQejw2OVNPCbj42KtVMGRmEKW9S3xc7w0iU4/edit?tab=t.0#heading=h.lb5ydoxel954). 
 
 ## Overview
 
@@ -194,7 +194,7 @@ ollama pull qwen2.5vl:7b
 ```
 
 (`llama3.2-vision` is a natural first choice but is currently broken on
-Ollama's new engine, v0.30+ — it dropped support for the `mllama`
+Ollama's new engine, v0.30+, which dropped support for the `mllama`
 architecture that model uses. `llava` runs but was inaccurate in testing --
 see below. `qwen2.5vl:7b` is chart/document-trained and is what's validated
 here.)
@@ -211,7 +211,7 @@ dedicated "Charts & Visual Data Detected" section of the PDF report
 capped at a lower confidence than table/text extraction, since they're read
 off pixels rather than cited from text.
 
-**Model choice matters:** in live testing, `llava` reliably *detected*
+Model choice matters. In live testing, `llava` reliably *detected*
 charts and returned well-formed JSON, but its actual data-reading accuracy
 was poor -- on a test chart it misread both the title and every plotted
 value. Switching to `qwen2.5vl:7b` (chart/document-trained, 95.7 on DocVQA)
@@ -223,12 +223,12 @@ page regardless of model, not a citation-grade fact.
 
 # Trust & Guardrails
 
-- **No hallucinations policy**: missing fields are null + listed in `missing_fields`.
-- **Evidence required**: every field includes `{doc_name, page, snippet}`.
-- **Evidence verification**: if snippet is not found verbatim on the cited page, confidence is reduced and a note is added.
-- **Authority weighting**: e.g., LPA/Agreement > audited statements > quarterly letter > marketing deck.
-- **Cross-document validation**: inconsistencies trigger rule-based flags.
-- **Auditability**: outputs are reproducible via config + input manifests.
+- Nothing is invented. Missing fields are null and listed in `missing_fields`.
+- Every field includes evidence as `{doc_name, page, snippet}`.
+- If a snippet is not found verbatim on the cited page, confidence is reduced and a note is added.
+- Documents are weighted by authority, for example LPA/Agreement > audited statements > quarterly letter > marketing deck.
+- Inconsistencies across documents trigger rule-based flags.
+- Outputs are reproducible via config and input manifests.
 
 ---
 

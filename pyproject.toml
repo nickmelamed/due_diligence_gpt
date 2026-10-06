@@ -13,3 +13,31 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "mypy",
+    "hypothesis",
+    "types-PyYAML",
+    "types-requests",
+    "pandas-stubs",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["due_gpt", ".cache", "outputs"]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+ignore_missing_imports = true
+exclude = ["due_gpt/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: tests that take more than a few seconds"]

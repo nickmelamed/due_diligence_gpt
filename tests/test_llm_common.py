@@ -169,7 +169,8 @@ def test_sanitize_extraction_drops_malformed_metric_entries():
     data = {
         "metrics": [
             {"name": "net_irr", "raw_label": "Net IRR", "unit": "percent", "value": None},  # no value -> dropped
-            {"name": "tvpi", "raw_label": "TVPI", "unit": "multiple", "value": "not a number"},  # non-numeric -> dropped
+            # non-numeric value, dropped
+            {"name": "tvpi", "raw_label": "TVPI", "unit": "multiple", "value": "not a number"},
             "not even a dict",  # dropped
             {"name": "aum", "raw_label": "AUM", "unit": "usd", "value": 1.2e9, "confidence": 0.9},  # kept
         ]
