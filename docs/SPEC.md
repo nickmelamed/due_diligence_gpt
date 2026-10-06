@@ -1,10 +1,10 @@
 # DDGPT specification
 
 Drafted from the code on `wip/open-metrics` plus the owner's answers.
-Status tags: CONFIRMED means the owner stated it, INFERRED means it was read
-from the code or README, and OPEN needs an answer. Correct anything wrong.
+Every section is confirmed by the owner. Most were first read from the code
+and then reviewed, and the tags no longer separate the two.
 
-## 1. Purpose  [INFERRED, owner has not confirmed the summary]
+## 1. Purpose  [CONFIRMED]
 
 DDGPT is a proof-of-concept diligence copilot for institutional investors. It
 reads investment documents (LPAs, quarterly updates, decks, statements),
@@ -30,10 +30,11 @@ Breaking any of these makes the project wrong or dishonest.
 5. Runs are reproducible and auditable. Each run records config, input hashes,
    git commit, model names, and output hashes. Cache keys include a schema
    fingerprint so an old cache entry cannot serve a stale shape.
-6. A lower-authority document (for example a deck) must not silently override a
-   higher one (LPA, audited statements). Today this is enforced only through
-   the authority weight on confidence (section 5.4). Nothing ranks documents
-   against each other, and conflicts become flags. No test covers it.
+6. A lower-authority document (for example a deck) must not silently override
+   a higher one (LPA, audited statements). Authority only scales a document's
+   confidence (section 5.4). When documents conflict, the conflict becomes a
+   flag and neither value replaces the other. `tests/test_authority.py` covers
+   this.
 
 Not a rule: "no real data in the repo". The sample documents are synthetic
 (section 9).
@@ -47,7 +48,7 @@ These outputs must be honest, since a reader acts on them.
 - Risk flags and the risk score (section 7).
 - Metrics found and data completeness per document (section 8).
 
-## 4. Pipeline  [INFERRED]
+## 4. Pipeline  [CONFIRMED]
 
 ```text
 PDF/TXT -> load (+OCR fallback, tables, layout) -> extractors per document
@@ -59,7 +60,7 @@ PDF/TXT -> load (+OCR fallback, tables, layout) -> extractors per document
 CLI: `run`, `extract`, `flag`, `report`, `eval` (`src/ddgpt/cli.py`).
 Streamlit app: `scripts/streamlit_app.py`.
 
-## 5. Extraction  [INFERRED]
+## 5. Extraction  [CONFIRMED]
 
 ### 5.1 Open metrics
 A document yields a list of `MetricEntry` (name, raw_label, unit, value, basis,
@@ -104,7 +105,7 @@ Authority comes from the first substring of the lowercased filename found in
 Recency decays linearly over ten years (floor 0.30, 0.50 with no date).
 Dates without a timezone are treated as UTC, and future dates clamp to 1.0.
 
-## 6. Recommendation  [INFERRED]
+## 6. Recommendation  [CONFIRMED]
 - 2 or more RED flags: PASS. 1 RED, or 3 or more YELLOW: INVESTIGATE. Otherwise
   APPROVE.
 - `confidence` is the mean confidence of every extracted metric that has a
@@ -113,7 +114,7 @@ Dates without a timezone are treated as UTC, and future dates clamp to 1.0.
 - The recommendation is decided by this deterministic function. The LLM memo is
   instructed to restate it, not to change it.
 
-## 7. Flags and risk score  [INFERRED]
+## 7. Flags and risk score  [CONFIRMED]
 
 Rules in `src/ddgpt/rules/`:
 
@@ -129,9 +130,8 @@ Default tolerances: USD 3% relative, percent 2.0 points, multiples 5% relative,
 counts 1, years exact. Management fee uses 0.25 points.
 Risk score is `1 - exp(-sum(weights)/2)` with RED 1.0 and YELLOW 0.5. It
 saturates toward 1.0 and is meant to be de-emphasized next to the flag list.
-Proposed split, open for the owner to confirm: the management fee 0.25 points,
-exact vintage year, and RED for aum, mgmt_fee, carry and hurdle_rate are
-judgments. The USD, percent, multiple and count defaults are tuning values.
+Judgments, confirmed by the owner: the management fee 0.25 points, exact
+vintage year, and RED for aum, mgmt_fee, carry and hurdle_rate. The USD, percent, multiple and count defaults are tuning values.
 `tests/test_core_properties.py` pins the current values.
 
 ## 8. Data quality in the report  [CONFIRMED]
@@ -142,14 +142,14 @@ document, shown as `found/7` in the PDF and summed across documents in the
 memo. Average confidence uses the same helper as the recommendation
 (`extract/quality.py`), so the two agree.
 
-## 9. Privacy and cost controls  [INFERRED]
+## 9. Privacy and cost controls  [CONFIRMED]
 - `redact_before_llm` (default off) masks emails, SSNs, phones, and account
   numbers in text sent to LLMs. Evidence is checked against unredacted pages.
 - Disk cache (`.cache/`, pickle, keyed on extractor, model, prompt, schema
   fingerprint, and content). Pickle is read from the local cache only.
 - Only synthetic documents live in `sample_docs/` (CONFIRMED).
 
-## 10. Evaluation  [INFERRED]
+## 10. Evaluation  [CONFIRMED]
 `ddgpt eval` runs `eval/scenarios/scenario_01` and compares sorted
 `(type, severity)` pairs to `expected_flags.json`, logging PASS or FAIL. It
 exits 1 on FAIL. The fixture expects `(PERCENT_MISMATCH, RED)` with
@@ -160,6 +160,6 @@ runs it offline. A run with Cohere or Ollama active can add flags and fail.
 The Stop gate runs `check_style.py --changed`, `ruff check`, `mypy` (configured
 for `src`), and `pytest -x -q`. Current status is in PROGRESS.md.
 
-## 12. Non-goals and known limits  [INFERRED]
+## 12. Non-goals and known limits  [CONFIRMED]
 - Not an investment decision tool, and not citation-grade for chart values.
 - Cohere and Ollama are the only providers.

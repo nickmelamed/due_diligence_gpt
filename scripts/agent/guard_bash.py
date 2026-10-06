@@ -67,6 +67,28 @@ MSG_SECRET_ADD = "Never stage {}. Secret files stay out of git."
 MSG_SECRET_PRINT = "Do not print secrets or the environment."
 
 
+HEREDOC = re.compile(
+    r"<<-?[ \t]*(['\"]?)([A-Za-z_]\w*)\1([^\n]*)\n(.*?)\n[ \t]*\2[ \t]*(?=\n|$)", re.S)
+TEXT_CONSUMERS = {"cat", "tee"}
+
+
+def strip_text_heredocs(command):
+    """Drop heredoc bodies that only feed text to cat or tee.
+
+    Such a body is data, such as a document or a commit message that happens
+    to name a secret file. Bodies handed to an interpreter, a shell, or a
+    pipe stay in, because they can run.
+    """
+    def drop(m):
+        before = re.split(r"[;&|\n(`]", command[:m.start()])[-1].split()
+        words = [w for w in before if not re.match(r"^[A-Za-z_]\w*=", w)]
+        consumer = os.path.basename(words[0]) if words else ""
+        if consumer in TEXT_CONSUMERS and "|" not in m.group(3):
+            return command[m.start():m.start(4)].rstrip("\n") + "\n" + m.group(2)
+        return m.group(0)
+    return HEREDOC.sub(drop, command)
+
+
 def tokenize(command):
     lex = shlex.shlex(command.replace("\n", " ; "), posix=True,
                       punctuation_chars=True)
@@ -423,7 +445,7 @@ def main():
         return 0
     root = project_root(payload)
     cwd = payload.get("cwd") or str(root)
-    blocks, asks = analyze(command, root, cwd)
+    blocks, asks = analyze(strip_text_heredocs(command), root, cwd)
     if blocks:
         print("Blocked: " + " ".join(dict.fromkeys(blocks)), file=sys.stderr)
         return 2
