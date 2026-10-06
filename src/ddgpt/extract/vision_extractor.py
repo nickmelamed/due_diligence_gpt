@@ -153,7 +153,7 @@ class OllamaVisionExtractor:
                         title=title,
                         x_label=chart.get("x_label"),
                         y_label=chart.get("y_label"),
-                        series=series,
+                        series=series,  # type: ignore[arg-type]  # pydantic coerces the dicts
                         summary=summary,
                         confidence=CHART_CONFIDENCE,
                         evidence=Evidence(

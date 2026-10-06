@@ -51,7 +51,7 @@ def _load_docs(cfg: Config, paths: List[str]):
                 cfg.run.cache_dir,
                 "loaded_documents",
                 key,
-                lambda p=p: load_document(p, ocr_enabled=cfg.ocr.enabled, ocr_dpi=cfg.ocr.dpi),
+                lambda p=p: load_document(p, ocr_enabled=cfg.ocr.enabled, ocr_dpi=cfg.ocr.dpi),  # type: ignore[misc]  # default arg pins p per loop
                 enabled=cfg.run.enable_disk_cache,
             )
         )

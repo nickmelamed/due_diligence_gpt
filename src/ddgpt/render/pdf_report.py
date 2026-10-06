@@ -887,7 +887,7 @@ def render_ic_pdf(
         bottomMargin=48
     )
 
-    story = []
+    story: list = []
 
     build_title_block(
         story,

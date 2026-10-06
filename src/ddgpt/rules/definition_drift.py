@@ -33,10 +33,10 @@ class DefinitionDriftRule(Rule):
             for j in range(i + 1, len(extracted)):
                 A = extracted[i]
                 B = extracted[j]
-                ctx_a = A.get("net_irr_basis")
-                ctx_b = B.get("net_irr_basis")
-                basis_a = (ctx_a or {}).get("basis")
-                basis_b = (ctx_b or {}).get("basis")
+                ctx_a = A.get("net_irr_basis") or {}
+                ctx_b = B.get("net_irr_basis") or {}
+                basis_a = ctx_a.get("basis")
+                basis_b = ctx_b.get("basis")
 
                 if not basis_a or not basis_b or basis_a == basis_b:
                     continue
@@ -63,8 +63,8 @@ class DefinitionDriftRule(Rule):
             snippet = ((net_irr.get("evidence") or {}).get("snippet")) or ""
             local_basis = _local_basis(snippet)
 
-            ctx = doc.get("net_irr_basis")
-            doc_basis = (ctx or {}).get("basis")
+            ctx = doc.get("net_irr_basis") or {}
+            doc_basis = ctx.get("basis")
 
             if not local_basis or not doc_basis or local_basis == doc_basis:
                 continue

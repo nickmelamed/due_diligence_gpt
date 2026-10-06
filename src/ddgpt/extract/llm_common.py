@@ -199,7 +199,7 @@ def _backfill_legacy_fields(data: dict) -> None:
 
 
 def sanitize_extraction(data: dict) -> dict:
-    defaults = {
+    defaults: dict = {
         "notes": [],
         "missing_fields": []
     }
