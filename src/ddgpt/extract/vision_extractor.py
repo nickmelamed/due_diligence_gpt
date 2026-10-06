@@ -162,7 +162,7 @@ class OllamaVisionExtractor:
                             snippet=(title or summary)[:200],
                         ),
                     )
-                    extractions.append(extraction.dict())
+                    extractions.append(extraction.model_dump())
 
                 logger.info(
                     f"llm_call provider=ollama_vision model={self.model} doc={doc_name} "

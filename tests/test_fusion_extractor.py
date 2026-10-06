@@ -46,7 +46,7 @@ def test_contradicting_extractors_flagged_distinctly_from_cross_document_mismatc
     assert len(result.extractor_disagreements) == 1
     assert result.extractor_disagreements[0]["field"] == "aum"
 
-    flags = ExtractorDisagreementRule().apply([result.dict()])
+    flags = ExtractorDisagreementRule().apply([result.model_dump()])
     assert len(flags) == 1
     assert flags[0].type == "EXTRACTOR_DISAGREEMENT"
     # Must not collide with NumericMismatchRule's cross-document flag type.

@@ -71,7 +71,7 @@ def build_audit_manifest(
         "python_version": platform.python_version(),
         "platform": platform.platform(),
         "operator": os.environ.get("USER") or os.environ.get("USERNAME") or "unknown",
-        "inputs": [m.dict() for m in build_inputs_manifest(input_paths)],
+        "inputs": [m.model_dump() for m in build_inputs_manifest(input_paths)],
         "extractors": extractor_availability,
         "models": {
             "cohere_model": cfg.model.model,
