@@ -1,22 +1,26 @@
 from __future__ import annotations
+from ddgpt.extract.quality import average_confidence
 
-def determine_recommendation(flags):
+
+def determine_recommendation(flags, extracted=None):
     red = sum(1 for f in flags if f["severity"] == "RED")
     yellow = sum(1 for f in flags if f["severity"] == "YELLOW")
 
     if red >= 2:
-        return {
-            "decision": "PASS",
-            "confidence": 0.88
-        }
+        decision = "PASS"
+    elif red >= 1 or yellow >= 3:
+        decision = "INVESTIGATE"
+    else:
+        decision = "APPROVE"
 
-    if red >= 1 or yellow >= 3:
-        return {
-            "decision": "INVESTIGATE",
-            "confidence": 0.74
-        }
+    # Confidence reflects how much of the underlying data we actually
+    # trust (average extraction confidence), not the decision logic --
+    # a fixed per-decision constant here previously meant "APPROVE" always
+    # carried the *lowest* confidence of the three tiers, which read
+    # backwards to a reviewer.
+    confidence = average_confidence(extracted or []) or 0.0
 
     return {
-        "decision": "APPROVE",
-        "confidence": 0.66
+        "decision": decision,
+        "confidence": confidence,
     }

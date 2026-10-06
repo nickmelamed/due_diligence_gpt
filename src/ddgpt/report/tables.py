@@ -2,28 +2,49 @@ from __future__ import annotations
 from typing import List, Dict, Any
 import pandas as pd
 
+from ddgpt.extract.metric_registry import category_for, display_label
+
+
 def to_facts_table(extracted: List[Dict[str, Any]]) -> pd.DataFrame:
+    """Long format: one row per (document, metric) pair -- doc_name/
+    doc_date/category/metric_name/display_label/unit/value/confidence/
+    is_custom/page/snippet, plus one doc-level row's worth of
+    missing_fields/notes repeated per metric row for convenience.
+
+    Replaces the old wide format (one row per document, a fixed column per
+    of the six legacy metrics) which only worked because there were exactly
+    six known columns -- an open, per-document-variable metric set has no
+    fixed column list to pivot on, so long format is the only shape that
+    scales to it without either a sparse wide table or silently dropping
+    anything beyond the original six.
+    """
     rows = []
     for d in extracted:
-        rows.append({
-            "doc_name": d["doc_name"],
-            "doc_date": d.get("doc_date"),
-            "aum_value_usd": d["aum"]["value"],
-            "aum_conf": d["aum"]["confidence"],
-            "aum_page": d["aum"]["evidence"]["page"],
-            "aum_snippet": d["aum"]["evidence"]["snippet"],
-            "net_irr_pct": d["net_irr"]["value"],
-            "net_irr_conf": d["net_irr"]["confidence"],
-            "tvpi": d["tvpi"]["value"],
-            "target_irr_pct": d["target_irr"]["value"],
-            "mgmt_fee_pct": d["mgmt_fee"]["value"],
-            "mgmt_fee_conf": d["mgmt_fee"]["confidence"],
-            "mgmt_fee_page": d["mgmt_fee"]["evidence"]["page"],
-            "mgmt_fee_snippet": d["mgmt_fee"]["evidence"]["snippet"],
-            "carry_pct": d["carry"]["value"],
-            "carry_hurdle_pct": d["carry"]["hurdle"],
-            "carry_conf": d["carry"]["confidence"],
-            "missing_fields": ", ".join(d.get("missing_fields", [])),
-            "notes": " | ".join(d.get("notes", [])),
-        })
-    return pd.DataFrame(rows)
+        doc_name = d["doc_name"]
+        doc_date = d.get("doc_date")
+        missing_fields = ", ".join(d.get("missing_fields", []))
+        notes = " | ".join(d.get("notes", []))
+
+        for m in d.get("metrics", []):
+            evidence = m.get("evidence") or {}
+            rows.append({
+                "doc_name": doc_name,
+                "doc_date": doc_date,
+                "category": category_for(m["name"]),
+                "metric_name": m["name"],
+                "display_label": display_label(m["name"]),
+                "unit": m.get("unit"),
+                "value": m.get("value"),
+                "confidence": m.get("confidence"),
+                "is_custom": m.get("is_custom", False),
+                "page": evidence.get("page"),
+                "snippet": evidence.get("snippet"),
+                "missing_fields": missing_fields,
+                "notes": notes,
+            })
+
+    columns = [
+        "doc_name", "doc_date", "category", "metric_name", "display_label", "unit",
+        "value", "confidence", "is_custom", "page", "snippet", "missing_fields", "notes",
+    ]
+    return pd.DataFrame(rows, columns=columns)

@@ -28,14 +28,19 @@ from reportlab.lib.units import inch
 
 from datetime import datetime
 
-import pandas as pd
 import re
 import html
 import io
 
-from ddgpt.render.charts import collect_irr_figures, render_irr_reconciliation_chart
-
-METRIC_FIELDS = ("aum", "net_irr", "tvpi", "target_irr", "mgmt_fee", "carry")
+from ddgpt.render.charts import (
+    collect_irr_figures,
+    render_irr_reconciliation_chart,
+    collect_metric_figures,
+    docs_flagged_for_metric,
+    render_metric_reconciliation_chart,
+)
+from ddgpt.extract.metric_registry import CATEGORY_ORDER, CATEGORY_LABELS, category_for, display_label, format_metric_value
+from ddgpt.extract.quality import metric_confidences
 
 # Brand palette -- navy/gold institutional look, consistent with the dataviz
 # skill's status/categorical colors used in render/charts.py so the embedded
@@ -68,17 +73,14 @@ SEVERITY_TINT = {
 
 
 def compute_data_quality(extracted) -> list[dict]:
-    """Per-document extraction quality summary: how many of the six core
-    metrics were found, their average confidence, and how evidence
+    """Per-document extraction quality summary: how many metrics were
+    actually found (open-ended -- whatever the document contains, not a
+    fixed set of six names), their average confidence, and how evidence
     verification classified each (verbatim / fuzzy / not found) -- derived
     from the same `notes` that postprocess.verify_metric already writes."""
     rows = []
     for d in extracted:
-        present = []
-        for key in METRIC_FIELDS:
-            metric = d.get(key, {})
-            if metric.get("value") is not None:
-                present.append(metric.get("confidence", 0.0))
+        present = metric_confidences([d])
 
         notes = d.get("notes", [])
         fuzzy = sum(1 for n in notes if "matched page fuzzily" in n)
@@ -86,12 +88,10 @@ def compute_data_quality(extracted) -> list[dict]:
 
         rows.append({
             "doc_name": d.get("doc_name", ""),
-            "fields_found": len(present),
-            "fields_total": len(METRIC_FIELDS),
+            "metrics_found": len(present),
             "avg_confidence": (sum(present) / len(present)) if present else None,
             "fuzzy_matches": fuzzy,
             "not_found": not_found,
-            "missing_fields": len(d.get("missing_fields", [])),
         })
     return rows
 
@@ -104,16 +104,6 @@ def _confidence_tier(value):
     if value >= 0.5:
         return "Medium"
     return "Low"
-
-
-def _fmt_cell(value) -> str:
-    """str(value) renders a missing field as 'N/A' consistently -- a bare
-    str() call turns a pandas NaN (which a facts_df column mixing real
-    values and None across multiple documents coerces None into) into the
-    literal text "nan", not the "N/A" a None alone would have produced."""
-    if value is None or pd.isna(value):
-        return "N/A"
-    return str(value)
 
 
 CONFIDENCE_COLORS = {
@@ -371,7 +361,7 @@ def build_title_block(
     story,
     styles,
     risk_score,
-    facts_df=None,
+    extracted=None,
     data_quality=None,
     recommendation=None
 ):
@@ -392,31 +382,40 @@ def build_title_block(
     story.append(meta_table)
     story.append(Spacer(1, 8))
 
-    if facts_df is not None and len(facts_df):
-        doc_names = ", ".join(str(n) for n in facts_df["doc_name"].tolist())
+    if extracted:
+        doc_names = ", ".join(str(d.get("doc_name", "")) for d in extracted)
         story.append(
             Paragraph(
-                f'<b>Documents analyzed ({len(facts_df)}):</b> {format_inline(doc_names)}',
+                f'<b>Documents analyzed ({len(extracted)}):</b> {format_inline(doc_names)}',
                 styles["Small"]
             )
         )
         story.append(Spacer(1, 12))
 
-    build_stat_tiles(story, styles, risk_score, recommendation, data_quality)
+    n_docs = len(extracted) if extracted else 0
+    build_stat_tiles(story, styles, risk_score, recommendation, data_quality, n_docs)
 
     if data_quality:
-        found = sum(r["fields_found"] for r in data_quality)
-        total = sum(r["fields_total"] for r in data_quality)
+        found = sum(r["metrics_found"] for r in data_quality)
         confidences = [r["avg_confidence"] for r in data_quality if r["avg_confidence"] is not None]
         avg_conf = sum(confidences) / len(confidences) if confidences else None
         conf_text = f"{avg_conf:.0%}" if avg_conf is not None else "N/A"
-        n_docs = len(data_quality)
 
         story.append(Spacer(1, 8))
         story.append(
             Paragraph(
-                f"Average extraction confidence {conf_text} across {found} fields spanning "
-                f"{n_docs} source document{'s' if n_docs != 1 else ''}.",
+                f"Average extraction confidence {conf_text} across {found} metric{'s' if found != 1 else ''} "
+                f"extracted from {n_docs} source document{'s' if n_docs != 1 else ''}.",
+                styles["Small"]
+            )
+        )
+
+    if n_docs <= 1:
+        story.append(Spacer(1, 4))
+        story.append(
+            Paragraph(
+                "Risk score reflects cross-document reconciliation only -- with a single "
+                "source document, no contradictions can be detected.",
                 styles["Small"]
             )
         )
@@ -424,15 +423,18 @@ def build_title_block(
     story.append(Spacer(1, 20))
 
 
-def build_stat_tiles(story, styles, risk_score, recommendation, data_quality):
+def build_stat_tiles(story, styles, risk_score, recommendation, data_quality, n_docs=0):
 
     recommendation = recommendation or {}
     decision = recommendation.get("decision", "N/A")
     confidence = recommendation.get("confidence", 0.0)
     decision_color = DECISION_COLORS.get(decision, INK)
+    # A risk score of 0 from a single document isn't "no risk found" the
+    # way it is with 2+ documents -- there was nothing to reconcile at all,
+    # so the number is muted rather than shown in the usual prominent ink.
+    risk_score_color = MUTED if n_docs <= 1 else None
 
-    found = sum(r["fields_found"] for r in data_quality) if data_quality else 0
-    total = sum(r["fields_total"] for r in data_quality) if data_quality else 0
+    found = sum(r["metrics_found"] for r in data_quality) if data_quality else 0
 
     def tile(value_text, label_text, color=None):
         value_style = styles["StatValue"]
@@ -465,10 +467,10 @@ def build_stat_tiles(story, styles, risk_score, recommendation, data_quality):
     tile_col = Table(
         [
             [
-                tile(f"{risk_score:.2f}", "RISK SCORE (0–1)"),
+                tile(f"{risk_score:.2f}", "RISK SCORE (0–1)", risk_score_color),
                 tile(decision, "RECOMMENDATION", decision_color),
-                tile(f"{confidence:.0%}", "CONFIDENCE"),
-                tile(f"{found} / {total}", "FIELDS EXTRACTED"),
+                tile(f"{confidence:.0%}", "DATA CONFIDENCE"),
+                tile(f"{found}", "METRICS EXTRACTED"),
             ]
         ],
         colWidths=[1.55 * inch] * 4
@@ -566,149 +568,116 @@ def build_irr_chart_section(story, styles, extracted):
     story.append(Spacer(1, 18))
 
 
-# Evidence Table
+# Extracted Metrics -- grouped by category (Performance / Fees & Terms /
+# Capital & Size / Other-Custom) rather than one wide fixed-column table,
+# since the metric set is now open-ended and a wide pivot only ever worked
+# because there were exactly six known columns. Each metric present gets
+# its own compact (Document, Value, Confidence) block -- only listing
+# documents that actually have it, no blank cells for the ones that don't.
 
-def build_evidence_table(
-    story,
-    styles,
-    facts_df,
-    section_number
-):
+def _truncate(text: str, max_len: int) -> str:
+    text = text or ""
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
 
-    section_header(story, styles, section_number, "Extracted Metrics")
 
-    table_data = [[
-        "Document",
-        "Net IRR",
-        "Target IRR",
-        "TVPI",
-        "Mgmt Fee",
-        "Carry",
-        "Confidence"
-    ]]
+def _source_cell_text(evidence: dict) -> str:
+    page = evidence.get("page")
+    snippet = evidence.get("snippet")
+    if snippet:
+        return f'p.{page}: "{_truncate(snippet, 90)}"' if page else f'"{_truncate(snippet, 90)}"'
+    if page:
+        return f"p.{page}"
+    return "—"
 
-    conf_cols = [c for c in ("aum_conf", "net_irr_conf", "mgmt_fee_conf", "carry_conf") if c in facts_df.columns]
+
+def _build_metric_table(styles, metric_rows):
+    table_data = [["Document", "Value", "Confidence", "Source"]]
     tier_by_row = []
 
-    for _, row in facts_df.iterrows():
-
-        confs = [row[c] for c in conf_cols if pd.notna(row[c])]
-        avg_conf = (sum(confs) / len(confs)) if confs else None
-        tier = _confidence_tier(avg_conf)
+    for row in metric_rows:
+        tier = _confidence_tier(row["confidence"])
         tier_by_row.append(tier)
-
+        source_text = _source_cell_text(row.get("evidence") or {})
         table_data.append([
             Paragraph(html.escape(str(row["doc_name"]), quote=False), styles["TableCell"]),
-            _fmt_cell(row["net_irr_pct"]),
-            _fmt_cell(row["target_irr_pct"]),
-            _fmt_cell(row["tvpi"]),
-            _fmt_cell(row["mgmt_fee_pct"]),
-            _fmt_cell(row["carry_pct"]),
-            tier if avg_conf is None else f"{tier} ({avg_conf:.0%})"
+            format_metric_value(row["value"], row["unit"]),
+            f"{tier} ({row['confidence']:.0%})" if row["confidence"] else tier,
+            Paragraph(html.escape(source_text, quote=False), styles["TableCell"]),
         ])
 
-    table = Table(
-        table_data,
-        colWidths=[
-            2.1 * inch,
-            0.8 * inch,
-            0.9 * inch,
-            0.7 * inch,
-            0.8 * inch,
-            0.7 * inch,
-            1.1 * inch
-        ]
-    )
+    table = Table(table_data, colWidths=[1.9 * inch, 0.95 * inch, 1.2 * inch, 2.3 * inch])
 
     style_commands = [
-
-        (
-            "BACKGROUND",
-            (0, 0),
-            (-1, 0),
-            colors.HexColor(NAVY)
-        ),
-
-        (
-            "TEXTCOLOR",
-            (0, 0),
-            (-1, 0),
-            colors.white
-        ),
-
-        (
-            "FONTNAME",
-            (0, 0),
-            (-1, 0),
-            "Helvetica-Bold"
-        ),
-
-        (
-            "GRID",
-            (0, 0),
-            (-1, -1),
-            0.5,
-            colors.HexColor(HAIRLINE)
-        ),
-
-        (
-            "ROWBACKGROUNDS",
-            (0, 1),
-            (-1, -1),
-            [
-                colors.white,
-                colors.HexColor("#f7f5ef")
-            ]
-        ),
-
-        (
-            "BOTTOMPADDING",
-            (0, 0),
-            (-1, 0),
-            10
-        ),
-
-        (
-            "TOPPADDING",
-            (0, 0),
-            (-1, -1),
-            8
-        ),
-
-        (
-            "BOTTOMPADDING",
-            (0, 1),
-            (-1, -1),
-            8
-        ),
-
-        (
-            "VALIGN",
-            (0, 0),
-            (-1, -1),
-            "TOP"
-        )
-
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(NAVY)),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(HAIRLINE)),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7f5ef")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]
-
-    # Confidence column (last column) gets its tier color as text, so a
-    # reviewer can see data quality at a glance without opening the
-    # Streamlit "Under the Hood" audit view.
     for row_idx, tier in enumerate(tier_by_row, start=1):
-        style_commands.append(
-            ("TEXTCOLOR", (-1, row_idx), (-1, row_idx), CONFIDENCE_COLORS[tier])
-        )
-        style_commands.append(
-            ("FONTNAME", (-1, row_idx), (-1, row_idx), "Helvetica-Bold")
-        )
+        style_commands.append(("TEXTCOLOR", (2, row_idx), (2, row_idx), CONFIDENCE_COLORS[tier]))
+        style_commands.append(("FONTNAME", (2, row_idx), (2, row_idx), "Helvetica-Bold"))
 
     table.setStyle(TableStyle(style_commands))
+    return table
 
-    story.append(table)
 
-    story.append(
-        Spacer(1, 24)
-    )
+def build_metrics_sections(story, styles, extracted, flags, section_number):
+    section_header(story, styles, section_number, "Extracted Metrics")
+
+    by_category = {}
+    for doc in extracted or []:
+        doc_name = doc.get("doc_name", "")
+        for m in doc.get("metrics") or []:
+            if m.get("value") is None:
+                continue
+            category = category_for(m["name"])
+            by_category.setdefault(category, {}).setdefault(m["name"], []).append({
+                "doc_name": doc_name,
+                "value": m["value"],
+                "confidence": m.get("confidence", 0.0),
+                "unit": m.get("unit", "other"),
+                "evidence": m.get("evidence") or {},
+            })
+
+    if not any(by_category.values()):
+        story.append(Paragraph("No metrics extracted.", styles["Body"]))
+        story.append(Spacer(1, 16))
+        return
+
+    for category in CATEGORY_ORDER:
+        metrics_in_category = by_category.get(category)
+        if not metrics_in_category:
+            continue
+
+        story.append(Paragraph(CATEGORY_LABELS[category], styles["SubHeading"]))
+
+        for name in sorted(metrics_in_category, key=display_label):
+            rows = sorted(metrics_in_category[name], key=lambda r: r["doc_name"])
+
+            story.append(Paragraph(f"<b>{format_inline(display_label(name))}</b>", styles["Body"]))
+            story.append(_build_metric_table(styles, rows))
+            story.append(Spacer(1, 6))
+
+            # A chart earns its place here only when there's an actual
+            # cross-document disagreement to visualize -- not for every
+            # metric, which would bloat the report with a chart per row.
+            conflicting = docs_flagged_for_metric(flags or [], name)
+            if conflicting:
+                figures = collect_metric_figures(extracted, name, conflicting)
+                png_bytes = render_metric_reconciliation_chart(figures)
+                if png_bytes:
+                    story.append(Image(io.BytesIO(png_bytes), width=4.5 * inch, height=2.25 * inch))
+                    story.append(Spacer(1, 8))
+
+        story.append(Spacer(1, 10))
+
+    story.append(Spacer(1, 10))
 
 
 # Data Quality Section
@@ -736,7 +705,7 @@ def build_data_quality_section(
 
     table_data = [[
         "Document",
-        "Fields Found",
+        "Metrics Found",
         "Avg Confidence",
         "Fuzzy Matches",
         "Not Found"
@@ -746,7 +715,7 @@ def build_data_quality_section(
         avg_conf = row["avg_confidence"]
         table_data.append([
             Paragraph(html.escape(str(row["doc_name"]), quote=False), styles["TableCell"]),
-            f'{row["fields_found"]}/{row["fields_total"]}',
+            str(row["metrics_found"]),
             "N/A" if avg_conf is None else f"{avg_conf:.0%}",
             str(row["fuzzy_matches"]),
             str(row["not_found"]),
@@ -891,7 +860,6 @@ def render_ic_pdf(
     output_path: str,
     memo: str,
     flags,
-    facts_df,
     risk_score,
     extracted=None,
     recommendation=None
@@ -915,7 +883,7 @@ def render_ic_pdf(
         story,
         styles,
         risk_score,
-        facts_df=facts_df,
+        extracted=extracted,
         data_quality=data_quality,
         recommendation=recommendation
     )
@@ -933,10 +901,11 @@ def render_ic_pdf(
         extracted
     )
 
-    build_evidence_table(
+    build_metrics_sections(
         story,
         styles,
-        facts_df,
+        extracted,
+        flags,
         2
     )
 

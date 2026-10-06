@@ -108,7 +108,6 @@ def run(
             output_path=str(out_path / "ic_memo.pdf"),
             memo=result["ic_memo"],
             flags=result["flags"],
-            facts_df=facts_df,
             risk_score=result["risk_score"],
             extracted=result["extracted"],
             recommendation=result["recommendation"]
@@ -224,7 +223,7 @@ def report(
     df = to_facts_table(extracted)
     df.to_csv(Path(out) / "facts_table.csv", index=False)
 
-    recommendation = determine_recommendation(flags)
+    recommendation = determine_recommendation(flags, extracted)
     risk_score = RiskEngine.score_from_severities([f["severity"] for f in flags])
 
     # IC copilot (falls back to a deterministic template if CO_API_KEY is unset)
@@ -238,7 +237,6 @@ def report(
             output_path=str(Path(out) / "ic_memo.pdf"),
             memo=memo,
             flags=flags,
-            facts_df=df,
             risk_score=risk_score,
             extracted=extracted,
             recommendation=recommendation

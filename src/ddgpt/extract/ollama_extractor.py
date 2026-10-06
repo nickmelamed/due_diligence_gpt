@@ -14,8 +14,10 @@ from ddgpt.extract.regex_extractor import RegexExtractor
 from ddgpt.extract.llm_common import (
     chunk_pages,
     build_schema_hint,
+    build_known_metrics_hint,
     sanitize_extraction,
     merge_chunk_docs,
+    extract_with_evidence_retry,
 )
 
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
@@ -49,11 +51,19 @@ class OllamaExtractor(Extractor):
     same underlying model.
     """
 
-    def __init__(self, model: str, temperature: float, prompt_text: str, host: str = DEFAULT_OLLAMA_HOST):
+    def __init__(
+        self,
+        model: str,
+        temperature: float,
+        prompt_text: str,
+        host: str = DEFAULT_OLLAMA_HOST,
+        enable_evidence_retry: bool = True,
+    ):
         self.model = model
         self.temperature = temperature
         self.prompt_text = prompt_text
         self.host = host
+        self.enable_evidence_retry = enable_evidence_retry
 
     def extract(self, doc_name: str, pages: List[Page]) -> ExtractedDoc:
         chunks = chunk_pages(pages, MAX_CHARS_PER_CALL)
@@ -65,9 +75,19 @@ class OllamaExtractor(Extractor):
         return merge_chunk_docs(doc_name, chunk_docs, source_label="Ollama")
 
     def _extract_chunk(self, doc_name: str, pages: List[Page]) -> ExtractedDoc:
+        return extract_with_evidence_retry(
+            pages,
+            lambda: self._extract_chunk_attempt(doc_name, pages),
+            enable_retry=self.enable_evidence_retry,
+            doc_name=doc_name,
+        )
+
+    def _extract_chunk_attempt(self, doc_name: str, pages: List[Page]) -> ExtractedDoc:
         pages_block = "\n\n".join([f"--- PAGE {p.page_num} ---\n{p.text}" for p in pages])
 
         prompt = f"""{self.prompt_text}
+
+{build_known_metrics_hint()}
 
 SCHEMA EXAMPLE (shape only):
 {json.dumps(build_schema_hint(doc_name))}

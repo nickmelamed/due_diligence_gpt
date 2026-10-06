@@ -26,6 +26,8 @@ from ddgpt.report.tables import (
     to_facts_table
 )
 
+from ddgpt.extract.metric_registry import display_label
+
 load_dotenv()
 
 
@@ -167,15 +169,6 @@ def files_hash(files):
         for f in files
     )
 
-AUDIT_FIELD_LABELS = {
-    "aum": "AUM",
-    "net_irr": "Net IRR",
-    "tvpi": "TVPI",
-    "target_irr": "Target IRR",
-    "mgmt_fee": "Management Fee",
-    "carry": "Carry",
-}
-
 def candidates_dataframe(candidates):
     rows = []
     for c in candidates:
@@ -232,7 +225,6 @@ if uploaded:
                     output_path=pdf_tmp.name,
                     memo=result["ic_memo"],
                     flags=result["flags"],
-                    facts_df=facts_df,
                     risk_score=result["risk_score"],
                     extracted=result["extracted"],
                     recommendation=result["recommendation"]
@@ -375,18 +367,21 @@ if st.session_state.result:
         result["extracted"]
     )
 
-    display_cols = [
-        "doc_name",
-        "net_irr_pct",
-        "target_irr_pct",
-        "tvpi",
-        "mgmt_fee_pct",
-        "carry_pct"
-    ]
+    # Long format (one row per document x metric) -- the open metric set
+    # has no fixed column list to pivot to wide, unlike the old six-field
+    # display this replaces.
+    display_df = facts_df[["doc_name", "display_label", "value", "unit", "confidence"]].rename(columns={
+        "doc_name": "Document",
+        "display_label": "Metric",
+        "value": "Value",
+        "unit": "Unit",
+        "confidence": "Confidence",
+    })
 
     st.dataframe(
-        facts_df[display_cols],
-        use_container_width=True
+        display_df,
+        use_container_width=True,
+        hide_index=True
     )
 
     st.divider()
@@ -421,12 +416,14 @@ if st.session_state.result:
 
             any_candidates = False
 
-            for field_key, label in AUDIT_FIELD_LABELS.items():
-                candidates = doc.get("extraction_candidates", {}).get(field_key, [])
+            all_candidates = doc.get("extraction_candidates", {})
+            for field_key in sorted(all_candidates.keys(), key=display_label):
+                candidates = all_candidates.get(field_key, [])
                 if not candidates:
                     continue
 
                 any_candidates = True
+                label = display_label(field_key)
                 st.markdown(f"**{label}**")
 
                 if field_key in disagreement_fields:

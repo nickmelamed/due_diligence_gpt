@@ -27,8 +27,12 @@ class ICCopilot:
         if recommendation:
             recommendation_instruction = f"""
 The recommendation has ALREADY been decided by a deterministic rules engine:
-**{recommendation["decision"]}** (confidence {recommendation["confidence"]:.2f}).
-State this recommendation verbatim in section 3 -- do not substitute your own judgment.
+**{recommendation["decision"]}**. State this recommendation verbatim in section 3 --
+do not substitute your own judgment. Its accompanying confidence value
+({recommendation["confidence"]:.2f}) is the AVERAGE EXTRACTION CONFIDENCE of the
+underlying data, not a confidence in the decision logic itself -- refer to it as
+"data confidence" or "extraction confidence", never as confidence in the
+recommendation's correctness.
 """
 
         prompt = f"""
@@ -55,7 +59,12 @@ TASK:
 2. Identify inconsistencies
 3. Provide recommendation:
    APPROVE / INVESTIGATE / PASS
-4. Justify using evidence
+4. Justify using evidence. For EVERY metric you cite, quote the exact
+   `evidence.snippet` text from the extracted data in quotation marks
+   alongside its page number -- e.g. `Management Fee: 2.00% (p.1, "Management
+   Fee: 2.00%") `. Do not cite a page number alone, and do not paraphrase
+   the snippet -- the reader needs to see the literal source text to confirm
+   the figure was not hallucinated.
 
 Return professional markdown suitable
 for an institutional IC memo.
