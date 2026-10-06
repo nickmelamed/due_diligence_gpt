@@ -6,4 +6,7 @@
 # is not installed yet fails every turn. Switch to `make agent-check` once
 # the Makefile's tools are installed.
 python3 scripts/agent/check_style.py --changed .
+./due_gpt/bin/ruff check .
+./due_gpt/bin/mypy
+./due_gpt/bin/python -m pytest -x -q
 # make agent-check
