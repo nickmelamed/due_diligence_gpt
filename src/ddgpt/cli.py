@@ -285,6 +285,7 @@ def eval(
             logger.info("eval PASS")
         else:
             logger.info(f"eval FAIL\nexpected={exp_pairs}\nactual={act_pairs}")
+            raise typer.Exit(code=1)
 
 if __name__ == "__main__":
     app()
