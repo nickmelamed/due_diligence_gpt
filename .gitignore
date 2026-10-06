@@ -11,3 +11,6 @@ due_gpt/
 # Claude Code agent tooling
 .claude/.gate-state.json
 .claude/settings.local.json
+
+# Generated report output
+ic_memo.pdf
